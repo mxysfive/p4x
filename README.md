@@ -4,6 +4,24 @@
 
 # p4c
 
+已完成内容：
+frontends/parsers/p4 目录下前端部分 新增
+**whileStatement forStatement**
+
+**registerDeclaration registerActionDeclaration**
+
+ir/ir.def 中完成新增语法的IR的申明
+
+frontends/p4/typeChecking/typeChecker.cpp 中需要完善**registerDeclaration registerActionDeclaration**的类型检查
+目前使用p4ctest 测试编译器，仍然会出现如下问题：
+
+```In file: /home/mxy/p4c/frontends/p4/typeChecking/typeChecker.cpp:187
+Compiler Bug: testdata/test.p4(121): Could not find type of <RegisterDeclaration>(1827) key_1/234 RegisterDeclaration
+
+Register<b32_t, b32_t>(45000) key_1;
+
+可能是与typeMap的初始化有关，目前尚未解决。
+```
 p4c is a reference compiler for the P4 programming language.
 It supports both P4-14 and P4-16; you can find more information about P4
 [here](http://p4.org) and the specifications for both versions of the language
