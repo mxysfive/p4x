@@ -23,7 +23,7 @@ limitations under the License.
 %define api.namespace {P4}
 // TODO: Update, once we drop Ubuntu 18.04 support.
 // %define api.parser.class {P4Parser}
-%define parser_class_name {P4Parser}
+%define api.parser.class {P4Parser}
 
 // Use the C++-native variant representation of tokens.
 %define api.token.constructor
@@ -228,9 +228,9 @@ inline std::ostream& operator<<(std::ostream& out, const P4::Token& t) {
 %token<Token>      RANGE ".."
 %token<Token>      TRUE FALSE THIS
 %token<Token>      ABSTRACT ACTION ACTIONS APPLY BOOL BIT CONST CONTROL DEFAULT
-                   ELSE ENTRIES ENUM ERROR EXIT EXTERN HEADER HEADER_UNION IF IN INOUT
-                   INT KEY  LIST SELECT MATCH_KIND TYPE OUT PACKAGE PARSER PRAGMA PRIORITY RETURN
-                   STATE STRING STRUCT SWITCH TABLE TRANSITION TUPLE TYPEDEF VARBIT VALUESET VOID
+                   ELSE ENTRIES ENUM ERROR EXIT EXTERN FOR HEADER HEADER_UNION IF IN INOUT
+                   INT KEY  LIST SELECT MATCH_KIND TYPE OUT PACKAGE PARSER PRAGMA PRIORITY RETURN REGISTER REGACTION
+                   STATE STRING STRUCT SWITCH TABLE TRANSITION TUPLE TYPEDEF VARBIT VALUESET VOID WHILE
 
 %token<cstring> IDENTIFIER TYPE_IDENTIFIER STRING_LITERAL
 %token<UnparsedConstant>  INTEGER
@@ -269,7 +269,7 @@ inline std::ostream& operator<<(std::ostream& out, const P4::Token& t) {
 %type<IR::Vector<IR::SelectCase>*>  selectCaseList
 %type<IR::Statement*>       statement emptyStatement returnStatement
                             switchStatement exitStatement
-                            assignmentOrMethodCallStatement conditionalStatement
+                            assignmentOrMethodCallStatement conditionalStatement whileStatement forInitializer forStatement
                             directApplication
 %type<IR::BlockStatement*>  blockStatement parserBlockStatement controlBody
                             objInitializer
@@ -284,7 +284,7 @@ inline std::ostream& operator<<(std::ostream& out, const P4::Token& t) {
 %type<IR::Declaration*>     constantDeclaration actionDeclaration
                             variableDeclaration instantiation functionDeclaration
                             objDeclaration tableDeclaration controlLocalDeclaration
-                            parserLocalElement valueSetDeclaration
+                            parserLocalElement valueSetDeclaration registerDeclaration registerActionDeclaration
 %type<IR::Type_Declaration*>  headerTypeDeclaration structTypeDeclaration
                               headerUnionDeclaration derivedTypeDeclaration
                               parserDeclaration controlDeclaration enumDeclaration
@@ -463,6 +463,8 @@ declaration
     | errorDeclaration        { driver.onReadErrorDeclaration($1); $$ = nullptr; }
     | matchKindDeclaration    { $$ = $1; }
     | functionDeclaration     { $$ = $1; }
+    | registerDeclaration     { $$ = $1; } //todo add semVal
+    | registerActionDeclaration {$$ = $1; }
     ;
 
 nonTypeName
@@ -658,7 +660,7 @@ kvList
     ;
 
 kvPair
-    : name "=" expression             { $$ = new IR::NamedExpression(@1, *$1, $3); }
+    : name "=" initializer             { $$ = new IR::NamedExpression(@1, *$1, $3); }
     ;
 
 parameterList
@@ -796,6 +798,8 @@ parserStatement
     | constantDeclaration             { $$ = $1; }
     | parserBlockStatement            { $$ = $1; }
     | conditionalStatement            { $$ = $1; }
+    | whileStatement                  { $$ = $1; }
+    | forStatement                    { $$ = $1; } //TODO:add IR
     ;
 
 parserBlockStatement
@@ -910,6 +914,8 @@ controlLocalDeclaration
     | tableDeclaration         { $$ = $1; }
     | instantiation            { $$ = $1; }
     | variableDeclaration      { $$ = $1; }
+    | registerDeclaration       { $$ = $1; }
+    | registerActionDeclaration  {$$ = $1; }
     ;
 
 controlBody
@@ -1216,6 +1222,33 @@ conditionalStatement
         { $$ = new IR::IfStatement(@1, $3, $5, $7); }
     ;
 
+whileStatement
+    : WHILE "(" expression ")" statement
+        { $$ = new IR::WhileStatement(@1, $3, $5); }
+    ;
+
+forStatement
+    : FOR "(" forInitializer ";" expressionList ";" expressionList ")" statement
+        { $$ = new IR::ForStatement(@1, $3, $5, $7, $9); }
+    ;
+
+forInitializer
+    : kvList
+        {
+            $$ = new IR::ForInitializer(nullptr, $1);
+        }
+    | typeRef kvList
+        {
+           $$ = new IR::ForInitializer($1, $2);
+        }
+    | %empty
+        {
+
+        }
+    ;
+
+
+
 // To support direct invocation of a control or parser without instantiation
 directApplication
     : typeName "." APPLY "(" argumentList ")" ";" {
@@ -1234,6 +1267,8 @@ statement
     : assignmentOrMethodCallStatement  { $$ = $1; }
     | directApplication                { $$ = $1; }
     | conditionalStatement             { $$ = $1; }
+    | whileStatement                   { $$ = $1; }
+    | forStatement                     { $$ = $1; } //TODO: add ir pass
     | emptyStatement                   { $$ = $1; }
     | blockStatement                   { $$ = $1; }
     | returnStatement                  { $$ = $1; }
@@ -1383,6 +1418,17 @@ actionDeclaration
           $$ = new IR::P4Action(@3, *$3, $1, pl, $7); }
     ;
 
+
+registerActionDeclaration
+    : REGACTION l_angle typeArgumentList r_angle "(" expression ")" name "=" "{"
+        VOID APPLY "(" parameterList ")" statement
+    "}" ";"
+        {
+            //todo Add regActionIR
+            $$ = new IR::RegisterActionDeclaration(@1, *$8, $3, $6, $14, $16);
+        }
+    ;
+
 /************************* VARIABLES *****************************/
 
 variableDeclaration
@@ -1395,6 +1441,13 @@ variableDeclaration
                                        driver.structure->declareObject(*$2, $1->toString()); }
     ;
 
+registerDeclaration
+    : REGISTER l_angle typeArgumentList r_angle "(" expression ")" name ";"
+        {
+            //todo register_decl IR
+            $$ = new IR::RegisterDeclaration(@1, *$8, $3, $6);
+        }
+    ;
 constantDeclaration
     : optAnnotations CONST typeRef name "=" initializer ";"
                                      { $$ = new IR::Declaration_Constant(@4, *$4, $1, $3, $6);

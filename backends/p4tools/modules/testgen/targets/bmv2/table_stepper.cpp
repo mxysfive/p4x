@@ -8,7 +8,6 @@
 
 #include <boost/multiprecision/cpp_int.hpp>
 
-#include "backends/p4tools/common/lib/constants.h"
 #include "backends/p4tools/common/lib/trace_event_types.h"
 #include "backends/p4tools/common/lib/variables.h"
 #include "ir/declaration.h"
@@ -41,14 +40,14 @@ const IR::Expression *Bmv2V1ModelTableStepper::computeTargetMatchType(
     const TableUtils::KeyProperties &keyProperties, TableMatchMap *matches,
     const IR::Expression *hitCondition) {
     const IR::Expression *keyExpr = keyProperties.key->expression;
-    const auto &testgenOptions = TestgenOptions::get();
 
-    if (keyProperties.matchType == BMv2Constants::MATCH_KIND_OPT ||
-        keyProperties.matchType == P4Constants::MATCH_KIND_TERNARY) {
+    // TODO: We consider optional match types to be a no-op, but we could make them exact matches.
+    if (keyProperties.matchType == BMv2Constants::MATCH_KIND_OPT) {
         cstring keyName = properties.tableName + "_key_" + keyProperties.name;
         const auto *ctrlPlaneKey = ToolsVariables::getSymbolicVariable(keyExpr->type, keyName);
         // We can recover from taint by simply not adding the optional match.
         // Create a new symbolic variable that corresponds to the key expression.
+        const IR::Expression *ternaryMask = nullptr;
         // We can recover from taint by inserting a ternary match that is 0.
         const auto *wildCard = IR::getConstant(keyExpr->type, 0);
         if (keyProperties.isTainted) {
@@ -56,27 +55,17 @@ const IR::Expression *Bmv2V1ModelTableStepper::computeTargetMatchType(
                              new Ternary(keyProperties.key, ctrlPlaneKey, wildCard));
             return hitCondition;
         }
+        cstring maskName = properties.tableName + "_mask_" + keyProperties.name;
+        const auto *fullMatch = IR::getMaxValueConstant(keyExpr->type);
+        ternaryMask = ToolsVariables::getSymbolicVariable(keyExpr->type, maskName);
+        auto *maskCond =
+            new IR::LOr(new IR::Equ(ternaryMask, wildCard), new IR::Equ(ternaryMask, fullMatch));
         matches->emplace(keyProperties.name,
                          new Ternary(keyProperties.key, ctrlPlaneKey, wildCard));
-        // Calculate the conditions for the ternary or optional match.
-        const auto *ternaryMask = ToolsVariables::getSymbolicVariable(
-            keyExpr->type, properties.tableName + "_mask_" + keyProperties.name);
-        // Encode P4Runtime constraints for PTF and Protobuf tests.
-        // (https://p4.org/p4-spec/docs/p4runtime-spec-working-draft-html-version.html#sec-match-format)
-        if (testgenOptions.testBackend == "PTF" || testgenOptions.testBackend == "PROTOBUF" ||
-            testgenOptions.testBackend == "PROTOBUF_IR") {
-            hitCondition = new IR::LAnd(
-                hitCondition, new IR::Equ(new IR::BAnd(ctrlPlaneKey, ternaryMask), ctrlPlaneKey));
-        }
-        // Optional matches are either a ternary exact match or are fully wildcarded.
-        if (keyProperties.matchType == BMv2Constants::MATCH_KIND_OPT) {
-            const auto *fullMatch = IR::getMaxValueConstant(keyExpr->type);
-            hitCondition =
-                new IR::LAnd(hitCondition, new IR::LOr(new IR::Equ(ternaryMask, wildCard),
-                                                       new IR::Equ(ternaryMask, fullMatch)));
-        }
-        return new IR::LAnd(hitCondition, new IR::Equ(new IR::BAnd(keyExpr, ternaryMask),
-                                                      new IR::BAnd(ctrlPlaneKey, ternaryMask)));
+        return new IR::LAnd(
+            hitCondition,
+            new IR::LAnd(maskCond, new IR::Equ(new IR::BAnd(keyExpr, ternaryMask),
+                                               new IR::BAnd(ctrlPlaneKey, ternaryMask))));
     }
     // Action selector entries are not part of the match.
     if (keyProperties.matchType == BMv2Constants::MATCH_KIND_SELECTOR) {
@@ -85,7 +74,7 @@ const IR::Expression *Bmv2V1ModelTableStepper::computeTargetMatchType(
     }
     // Ranges are not yet implemented for BMv2 STF tests.
     if (keyProperties.matchType == BMv2Constants::MATCH_KIND_RANGE &&
-        testgenOptions.testBackend != "STF") {
+        TestgenOptions::get().testBackend != "STF") {
         cstring minName = properties.tableName + "_range_min_" + keyProperties.name;
         cstring maxName = properties.tableName + "_range_max_" + keyProperties.name;
         // We can recover from taint by matching on the entire possible range.
@@ -154,6 +143,10 @@ void Bmv2V1ModelTableStepper::evalTableActionProfile(
         auto *synthesizedAction = tableAction->clone();
         synthesizedAction->arguments = arguments;
 
+        // We need to set the table action in the state for eventual switch action_run hits.
+        // We also will need it for control plane table entries.
+        setTableAction(nextState, tableAction);
+
         // Finally, add all the new rules to the execution state.
         const ActionCall ctrlPlaneActionCall(actionName, actionType, ctrlPlaneArgs);
         auto tableRule =
@@ -178,7 +171,7 @@ void Bmv2V1ModelTableStepper::evalTableActionProfile(
         }
 
         nextState.set(getTableHitVar(table), IR::getBoolLiteral(true));
-        nextState.set(getTableActionVar(table), getTableActionString(tableAction));
+        nextState.set(getTableReachedVar(table), IR::getBoolLiteral(true));
         std::stringstream tableStream;
         tableStream << "Table Branch: " << properties.tableName;
         tableStream << " Chosen action: " << actionName;
@@ -242,6 +235,10 @@ void Bmv2V1ModelTableStepper::evalTableActionSelector(
         auto *synthesizedAction = tableAction->clone();
         synthesizedAction->arguments = arguments;
 
+        // We need to set the table action in the state for eventual switch action_run hits.
+        // We also will need it for control plane table entries.
+        setTableAction(nextState, tableAction);
+
         // Finally, add all the new rules to the execution state.
         ActionCall ctrlPlaneActionCall(actionName, actionType, ctrlPlaneArgs);
         auto tableRule =
@@ -268,7 +265,7 @@ void Bmv2V1ModelTableStepper::evalTableActionSelector(
         }
 
         nextState.set(getTableHitVar(table), IR::getBoolLiteral(true));
-        nextState.set(getTableActionVar(table), getTableActionString(tableAction));
+        nextState.set(getTableReachedVar(table), IR::getBoolLiteral(true));
         std::stringstream tableStream;
         tableStream << "Table Branch: " << properties.tableName;
         tableStream << " Chosen action: " << actionName;
@@ -396,12 +393,10 @@ void Bmv2V1ModelTableStepper::checkTargetProperties(
 void Bmv2V1ModelTableStepper::evalTargetTable(
     const std::vector<const IR::ActionListElement *> &tableActionList) {
     const auto *keys = table->getKey();
-    const auto &testgenOptions = TestgenOptions::get();
-
     // If we have no keys, there is nothing to match.
     if (keys == nullptr) {
         // Either override the default action or fall back to executing it.
-        auto testBackend = testgenOptions.testBackend;
+        auto testBackend = TestgenOptions::get().testBackend;
         if (testBackend == "STF" && !properties.defaultIsImmutable) {
             setTableDefaultEntries(tableActionList);
             return;
@@ -429,7 +424,7 @@ void Bmv2V1ModelTableStepper::evalTargetTable(
         case TableImplementation::selector: {
             // If an action selector is attached to the table, do not assume normal control plane
             // behavior.
-            if (testgenOptions.testBackend != "STF") {
+            if (TestgenOptions::get().testBackend != "STF") {
                 evalTableActionSelector(tableActionList);
             } else {
                 // We can only generate profile entries for PTF and Protobuf tests.
@@ -442,7 +437,7 @@ void Bmv2V1ModelTableStepper::evalTargetTable(
         case TableImplementation::profile: {
             // If an action profile is attached to the table, do not assume normal control plane
             // behavior.
-            if (testgenOptions.testBackend != "STF") {
+            if (TestgenOptions::get().testBackend != "STF") {
                 evalTableActionProfile(tableActionList);
             } else {
                 // We can only generate profile entries for PTF and Protobuf tests.

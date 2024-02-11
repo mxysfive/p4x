@@ -3,7 +3,6 @@
 #include <utility>
 
 #include "backends/p4tools/common/lib/arch_spec.h"
-#include "backends/p4tools/common/lib/util.h"
 #include "ir/id.h"
 #include "ir/ir.h"
 #include "ir/irutils.h"
@@ -62,9 +61,9 @@ const IR::PathExpression *SharedPnaProgramInfo::getBlockParam(cstring blockLabel
         paramType = resolveProgramType(program, tn);
     }
 
-    const auto &archSpec = getArchSpec();
-    auto archIndex = archSpec.getBlockIndex(blockLabel);
-    auto archRef = archSpec.getParamName(archIndex, paramIndex);
+    const auto *archSpec = TestgenTarget::getArchSpec();
+    auto archIndex = archSpec->getBlockIndex(blockLabel);
+    auto archRef = archSpec->getParamName(archIndex, paramIndex);
     return new IR::PathExpression(paramType, new IR::Path(archRef));
 }
 

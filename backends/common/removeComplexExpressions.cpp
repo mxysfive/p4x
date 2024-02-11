@@ -88,7 +88,7 @@ const IR::Expression *RemoveComplexExpressions::simplifyExpression(const IR::Exp
         return expression;
     } else {
         ComplexExpression ce;
-        cd.setCalledBy(this);
+        ce.setCalledBy(this);
         (void)expression->apply(ce);
         if (force || ce.isComplex) {
             LOG3("Moved into temporary " << dbp(expression));

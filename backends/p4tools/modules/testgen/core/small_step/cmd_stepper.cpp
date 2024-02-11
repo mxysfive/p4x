@@ -20,12 +20,12 @@
 #include "ir/id.h"
 #include "ir/indexed_vector.h"
 #include "ir/irutils.h"
-#include "ir/solver.h"
 #include "ir/vector.h"
 #include "lib/cstring.h"
 #include "lib/exceptions.h"
 #include "lib/log.h"
 #include "lib/null.h"
+#include "lib/solver.h"
 #include "midend/coverage.h"
 
 #include "backends/p4tools/modules/testgen/core/program_info.h"
@@ -60,19 +60,36 @@ bool CmdStepper::preorder(const IR::AssignmentStatement *assign) {
 
     state.markVisited(assign);
     const auto &left = ToolsVariables::convertReference(assign->left);
+    const auto *leftType = left->type;
 
     // Resolve the type of the left-and assignment, if it is a type name.
-    const auto *assignType = state.resolveType(left->type);
-    if (assign->right->is<IR::StructExpression>() ||
-        assign->right->to<IR::HeaderStackExpression>()) {
-        state.assignStructLike(left, assign->right);
-    } else if (assignType->is<IR::Type_Base>()) {
+    leftType = state.resolveType(leftType);
+    // Although we typically expand structure assignments into individual member assignments using
+    // the copyHeaders pass, some extern functions may return a list or struct expression. We can
+    // not always expand these return values as we do with the expandLookahead pass.
+    // Correspondingly, we need to retrieve the fields and set each member individually. This
+    // assumes that all headers and structures have been flattened and no nesting is left.
+    if (const auto *structType = leftType->to<IR::Type_StructLike>()) {
+        const auto *listExpr = assign->right->checkedTo<IR::ListExpression>();
+
+        std::vector<IR::StateVariable> flatRefValids;
+        auto flatRefFields = state.getFlatFields(left, structType, &flatRefValids);
+        // First, complete the assignments for the data structure.
+        for (size_t idx = 0; idx < flatRefFields.size(); ++idx) {
+            const auto &leftFieldRef = flatRefFields[idx];
+            state.set(leftFieldRef, listExpr->components[idx]);
+        }
+        // In case of a header, we also need to set the validity bits to true.
+        for (const auto &headerValid : flatRefValids) {
+            state.set(headerValid, IR::getBoolLiteral(true));
+        }
+    } else if (leftType->is<IR::Type_Base>()) {
         state.set(left, assign->right);
     } else {
-        TESTGEN_UNIMPLEMENTED("Unsupported assignment %1% of type %2%", assign,
-                              assignType->node_type_name());
+        TESTGEN_UNIMPLEMENTED("Unsupported assign type %1% node: %2%", leftType,
+                              leftType->node_type_name());
     }
-    state.add(*new TraceEvents::AssignmentStatement(*assign));
+
     state.popBody();
     result->emplace_back(state);
     return false;
@@ -235,8 +252,7 @@ bool CmdStepper::preorder(const IR::IfStatement *ifStatement) {
         // Some path selection strategies depend on looking ahead and collecting potential
         // nodes. If that is the case, apply the CoverableNodesScanner visitor.
         P4::Coverage::CoverageSet coveredNodes;
-        if (ifStatement->ifFalse != nullptr &&
-            requiresLookahead(TestgenOptions::get().pathSelectionPolicy)) {
+        if (requiresLookahead(TestgenOptions::get().pathSelectionPolicy)) {
             auto collector = CoverableNodesScanner(state);
             collector.updateNodeCoverage(ifStatement->ifFalse, coveredNodes);
         }
@@ -263,7 +279,6 @@ bool CmdStepper::preorder(const IR::MethodCallStatement *methodCallStatement) {
     }
     state.pushCurrentContinuation(type);
     state.replaceBody(Continuation::Body({Continuation::Return(methodCallStatement->methodCall)}));
-    state.add(*new TraceEvents::MethodCall(methodCallStatement->methodCall));
     result->emplace_back(state);
     return false;
 }
@@ -342,6 +357,7 @@ bool CmdStepper::preorder(const IR::ParserState *parserState) {
     logStep(parserState);
 
     auto &nextState = state.clone();
+
     nextState.add(*new TraceEvents::ParserState(parserState));
 
     if (parserState->name == IR::ParserState::accept) {
@@ -468,6 +484,37 @@ const Constraint *CmdStepper::startParser(const IR::P4Parser *parser, ExecutionS
     return result;
 }
 
+IR::SwitchStatement *CmdStepper::replaceSwitchLabels(const IR::SwitchStatement *switchStatement) {
+    const auto *member = switchStatement->expression->to<IR::Member>();
+    BUG_CHECK(member != nullptr && member->member.name == IR::Type_Table::action_run,
+              "Invalid format of %1% for action_run", switchStatement->expression);
+    const auto *methodCall = member->expr->to<IR::MethodCallExpression>();
+    BUG_CHECK(methodCall, "Invalid format of %1% for action_run", member->expr);
+    const auto *tableCall = methodCall->method->to<IR::Member>();
+    BUG_CHECK(tableCall, "Invalid format of %1% for action_run", methodCall->method);
+    const auto *table = state.findTable(methodCall->method->to<IR::Member>());
+    CHECK_NULL(table);
+    auto actionVar = TableStepper::getTableActionVar(table);
+    IR::Vector<IR::SwitchCase> newCases;
+    std::map<cstring, int> actionsIds;
+    for (size_t index = 0; index < table->getActionList()->size(); index++) {
+        actionsIds.emplace(table->getActionList()->actionList.at(index)->getName().toString(),
+                           index);
+    }
+    for (const auto *switchCase : switchStatement->cases) {
+        auto *newSwitchCase = switchCase->clone();
+        // Do not replace default expression labels.
+        if (!newSwitchCase->label->is<IR::DefaultExpression>()) {
+            newSwitchCase->label =
+                IR::getConstant(actionVar->type, actionsIds[switchCase->label->toString()]);
+        }
+        newCases.push_back(newSwitchCase);
+    }
+    auto *newSwitch = switchStatement->clone();
+    newSwitch->cases = newCases;
+    return newSwitch;
+}
+
 bool CmdStepper::preorder(const IR::SwitchStatement *switchStatement) {
     logStep(switchStatement);
 
@@ -475,70 +522,61 @@ bool CmdStepper::preorder(const IR::SwitchStatement *switchStatement) {
         // Evaluate the keyset in the first select case.
         return stepToSubexpr(
             switchStatement->expression, result, state,
-            [switchStatement](const Continuation::Parameter *v) {
+            [switchStatement, this](const Continuation::Parameter *v) {
                 if (!switchStatement->expression->type->is<IR::Type_ActionEnum>()) {
                     BUG("Only switch statements with action_run as expression are supported.");
                 }
-                auto *newSwitch = switchStatement->clone();
+                // If the switch statement has table action as expression, replace
+                // the case labels with indices.
+                auto *newSwitch = replaceSwitchLabels(switchStatement);
                 newSwitch->expression = v->param;
                 return newSwitch;
             });
     }
-    const auto *switchExpr = switchStatement->expression;
-    const auto &switchCases = switchStatement->cases;
-
     // After we have executed, we simple pick the index that matches with the returned constant.
+    auto &nextState = state.clone();
     std::vector<Continuation::Command> cmds;
     // If the switch expression is tainted, we can not predict which case will be chosen. We taint
     // the program counter and execute all of the statements.
-    if (Taint::hasTaint(switchExpr)) {
+    P4::Coverage::CoverageSet coveredNodes;
+    if (Taint::hasTaint(switchStatement->expression)) {
         auto currentTaint = state.getProperty<bool>("inUndefinedState");
         cmds.emplace_back(Continuation::PropertyUpdate("inUndefinedState", true));
-        for (const auto *switchCase : switchCases) {
+        for (const auto *switchCase : switchStatement->cases) {
             if (switchCase->statement != nullptr) {
                 cmds.emplace_back(switchCase->statement);
             }
         }
-        state.add(*new TraceEvents::Generic("TaintedSwitchCase"));
         cmds.emplace_back(Continuation::PropertyUpdate("inUndefinedState", currentTaint));
-        state.replaceTopBody(&cmds);
-        return false;
-    }
-    // Otherwise, we pick the switch statement case in a normal fashion.
-    auto &nextState = state.clone();
-    P4::Coverage::CoverageSet coveredNodes;
-    bool hasMatched = false;
-    /// Get the action list associated with this switch/case.
-    auto switchActionString = switchExpr->checkedTo<IR::StringLiteral>();
-
-    for (const auto *switchCase : switchCases) {
-        // We have either matched already, or still need to match.
-        hasMatched = hasMatched || switchActionString->value == switchCase->label->toString();
-        // Nothing to do with this statement. Fall through to the next case.
-        if (switchCase->statement == nullptr) {
-            continue;
-        }
-        // If any of the values in the match list hits, execute the switch case block.
-        if (hasMatched) {
-            // Some path selection strategies depend on looking ahead and collecting potential
-            // nodes. If that is the case, apply the CoverableNodesScanner visitor.
+    } else {
+        // Otherwise, we pick the switch statement case in a normal fashion.
+        bool hasMatched = false;
+        for (const auto *switchCase : switchStatement->cases) {
             if (requiresLookahead(TestgenOptions::get().pathSelectionPolicy)) {
+                // Some path selection strategies depend on looking ahead and collecting potential
+                // nodes. If that is the case, apply the CoverableNodesScanner visitor.
                 auto collector = CoverableNodesScanner(state);
                 collector.updateNodeCoverage(switchCase->statement, coveredNodes);
             }
-            nextState.add(*new TraceEvents::GenericDescription(
-                "SwitchCase", switchCase->label->getSourceInfo().toBriefSourceFragment()));
-            cmds.emplace_back(switchCase->statement);
-            // If the statement is a block, we do not fall through and terminate execution.
-            if (switchCase->statement->is<IR::BlockStatement>()) {
+            // We have either matched already, or still need to match.
+            hasMatched = hasMatched || switchStatement->expression->equiv(*switchCase->label);
+            // Nothing to do with this statement. Fall through to the next case.
+            if (switchCase->statement == nullptr) {
+                continue;
+            }
+            // If any of the values in the match list hits, execute the switch case block.
+            if (hasMatched) {
+                cmds.emplace_back(switchCase->statement);
+                // If the statement is a block, we do not fall through and terminate execution.
+                if (switchCase->statement->is<IR::BlockStatement>()) {
+                    break;
+                }
+            }
+            // The default label must be last. Always break here.
+            if (switchCase->label->is<IR::DefaultExpression>()) {
+                cmds.emplace_back(switchCase->statement);
                 break;
             }
-        }
-        // The default label must be last. Always break here.
-        if (switchCase->label->is<IR::DefaultExpression>()) {
-            nextState.add(*new TraceEvents::GenericDescription("SwitchCase", "default"));
-            cmds.emplace_back(switchCase->statement);
-            break;
         }
     }
     BUG_CHECK(!cmds.empty(), "Switch statements should have at least one case (default).");

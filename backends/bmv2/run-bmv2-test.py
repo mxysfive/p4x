@@ -22,7 +22,6 @@ import os
 import shutil
 import sys
 import tempfile
-from pathlib import Path
 from subprocess import Popen
 from threading import Thread
 
@@ -215,6 +214,9 @@ timeout = 10 * 60
 
 
 def run_model(options, tmpdir, jsonfile):
+    if not options.hasBMv2:
+        return SUCCESS
+
     # We can do this if an *.stf file is present
     basename = os.path.basename(options.p4filename)
     base, _ = os.path.splitext(basename)
@@ -240,11 +242,6 @@ def run_model(options, tmpdir, jsonfile):
     result = bmv2.generate_model_inputs(stf_map)
     if result != SUCCESS:
         return result
-
-    if not options.hasBMv2:
-        reportError("config.h indicates that BMv2 is not installed. Will skip running BMv2 tests")
-        return SUCCESS
-
     result = bmv2.run(stf_map)
     if result != SUCCESS:
         return result
@@ -268,8 +265,7 @@ def process_file(options, argv):
 
     if run_init_commands(options) != SUCCESS:
         return FAILURE
-    # ensure that tempfile.mkdtemp returns an absolute path, regardless of the py3 version
-    tmpdir = tempfile.mkdtemp(dir=Path(".").absolute())
+    tmpdir = tempfile.mkdtemp(dir=".")
     basename = os.path.basename(options.p4filename)
     base, _ = os.path.splitext(basename)
 
@@ -397,6 +393,8 @@ if __name__ == "__main__":
     logging.getLogger().addHandler(stderr_log)
 
     options.hasBMv2 = "HAVE_SIMPLE_SWITCH" in config.vars
+    if not options.hasBMv2:
+        reportError("config.h indicates that BMv2 is not installedwill skip running BMv2 tests")
     if options.p4filename.startswith(options.compilerBuildDir):
         options.testName = options.p4filename[len(options.compilerBuildDir) :]
         if options.testName.startswith("/"):

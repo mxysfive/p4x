@@ -1,5 +1,6 @@
 #include "backends/p4tools/modules/testgen/lib/test_backend.h"
 
+#include <iostream>
 #include <optional>
 
 #include "backends/p4tools/common/core/z3_solver.h"
@@ -22,7 +23,7 @@
 #include "backends/p4tools/modules/testgen/lib/final_state.h"
 #include "backends/p4tools/modules/testgen/lib/logging.h"
 #include "backends/p4tools/modules/testgen/lib/packet_vars.h"
-#include "backends/p4tools/modules/testgen/lib/test_framework.h"
+#include "backends/p4tools/modules/testgen/lib/tf.h"
 #include "backends/p4tools/modules/testgen/options.h"
 
 namespace P4Tools::P4Testgen {
@@ -35,11 +36,10 @@ bool TestBackEnd::run(const FinalState &state) {
         const auto *outputPortExpr = executionState->get(programInfo.getTargetOutputPortVar());
         const auto &coverableNodes = programInfo.getCoverableNodes();
         const auto *programTraces = state.getTraces();
-        const auto &testgenOptions = TestgenOptions::get();
 
-        // Don't increase the test count if --output-packet-only is enabled and we don't
+        // Don't increase the test count if --with-output-packet is enabled and we don't
         // produce a test with an output packet.
-        if (testgenOptions.outputPacketOnly) {
+        if (TestgenOptions::get().withOutputPacket) {
             auto outputPacketSize = executionState->getPacketBufferSize();
             bool packetIsDropped = executionState->getProperty<bool>("drop");
             if (outputPacketSize <= 0 || packetIsDropped) {
@@ -48,7 +48,7 @@ bool TestBackEnd::run(const FinalState &state) {
         }
 
         // If assertion mode is active, ignore any test that does not trigger an assertion.
-        if (testgenOptions.assertionModeEnabled) {
+        if (TestgenOptions::get().assertionModeEnabled) {
             if (!executionState->getProperty<bool>("assertionTriggered")) {
                 return needsToTerminate(testCount);
             }
@@ -84,7 +84,7 @@ bool TestBackEnd::run(const FinalState &state) {
         auto concolicOptState = state.computeConcolicState(*resolvedConcolicVariables);
         if (!concolicOptState.has_value()) {
             testCount++;
-            printPerformanceReport(std::nullopt);
+            printPerformanceReport(false);
             return needsToTerminate(testCount);
         }
         auto replacedState = concolicOptState.value().get();
@@ -98,37 +98,25 @@ bool TestBackEnd::run(const FinalState &state) {
 
         // Add a list of tracked branches to the test output, too.
         std::stringstream selectedBranches;
-        if (testgenOptions.trackBranches) {
+        if (TestgenOptions::get().trackBranches) {
             symbex.printCurrentTraceAndBranches(selectedBranches, *executionState);
         }
 
         abort = printTestInfo(executionState, testInfo, outputPortExpr);
         if (abort) {
             testCount++;
-            printPerformanceReport(std::nullopt);
+            printPerformanceReport(false);
             return needsToTerminate(testCount);
         }
         const auto *testSpec = createTestSpec(executionState, &finalModel, testInfo);
 
         // Commit an update to the visited nodes.
         // Only do this once we are sure we are generating a test.
-        auto hasUpdated = symbex.updateVisitedNodes(replacedState.getVisited());
-
-        // Skip test case generation if the --only-covering-tests is enabled and we do not increase
-        // coverage.
-        if (!coverableNodes.empty() && testgenOptions.coverageOptions.onlyCoveringTests &&
-            !hasUpdated) {
-            return needsToTerminate(testCount);
-        }
-
+        symbex.updateVisitedNodes(replacedState.getVisited());
         const P4::Coverage::CoverageSet &visitedNodes = symbex.getVisitedNodes();
-        if (!testgenOptions.hasCoverageTracking) {
+        float coverage = NAN;
+        if (coverableNodes.empty()) {
             printFeature("test_info", 4, "============ Test %1% ============", testCount);
-        } else if (coverableNodes.empty()) {
-            printFeature("test_info", 4,
-                         "============ Test %1%: No coverable nodes ============", testCount);
-            // All 0 nodes covered.
-            coverage = 1.0;
         } else {
             coverage =
                 static_cast<float>(visitedNodes.size()) / static_cast<float>(coverableNodes.size());
@@ -139,17 +127,17 @@ bool TestBackEnd::run(const FinalState &state) {
         }
 
         // Output the test.
-        Util::withTimer("backend", [this, &testSpec, &selectedBranches] {
+        Util::withTimer("backend", [this, &testSpec, &selectedBranches, &coverage] {
             testWriter->outputTest(testSpec, selectedBranches, testCount, coverage);
         });
 
         printTraces("============ End Test %1% ============\n", testCount);
         testCount++;
         P4::Coverage::printCoverageReport(coverableNodes, visitedNodes);
-        printPerformanceReport(std::nullopt);
+        printPerformanceReport(false);
 
         // If MAX_NODE_COVERAGE is enabled, terminate early if we hit max node coverage already.
-        if (testgenOptions.stopMetric == "MAX_NODE_COVERAGE" && coverage == 1.0) {
+        if (TestgenOptions::get().stopMetric == "MAX_NODE_COVERAGE" && coverage == 1.0) {
             return true;
         }
         return needsToTerminate(testCount);
@@ -242,8 +230,10 @@ bool TestBackEnd::printTestInfo(const ExecutionState * /*executionState*/, const
     return false;
 }
 
-int64_t TestBackEnd::getTestCount() const { return testCount; }
+void TestBackEnd::printPerformanceReport(bool write) const {
+    testWriter->printPerformanceReport(write);
+}
 
-float TestBackEnd::getCoverage() const { return coverage; }
+int64_t TestBackEnd::getTestCount() const { return testCount; }
 
 }  // namespace P4Tools::P4Testgen

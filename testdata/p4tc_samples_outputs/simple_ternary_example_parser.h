@@ -1,8 +1,5 @@
 #include "ebpf_kernel.h"
 
-#include <stdbool.h>
-#include <linux/if_ether.h>
-#include "pna.h"
 
 #define EBPF_MASK(t, w) ((((t)(1)) << (w)) - (t)1)
 #define BYTES(w) ((w) / 8)
@@ -40,11 +37,3 @@ struct my_ingress_metadata_t {
 };
 struct empty_metadata_t {
 };
-
-struct hdr_md {
-    struct my_ingress_headers_t cpumap_hdr;
-    struct my_ingress_metadata_t cpumap_usermeta;
-    unsigned ebpf_packetOffsetInBits;
-    __u8 __hook;
-};
-

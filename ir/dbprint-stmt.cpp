@@ -56,6 +56,21 @@ void IR::IfStatement::dbprint(std::ostream &out) const {
     out << " }" << unindent << setprec(prec);
 }
 
+void IR::WhileStatement::dbprint(std::ostream &out) const {
+    int prec = getprec(out);
+    out<< Prec_Low << "while (" << condition << ") {" <<indent << setprec(0) << Log::endl << whileBody
+        << " }" << unindent << setprec(prec);
+}
+void IR::ForInitializer::dbprint(std::ostream &out) const {
+    int prec = getprec(out);
+    out<<Prec_Low<<" forInitializer"<<Log::endl;
+}
+void IR::ForStatement::dbprint(std::ostream &out) const {
+    int prec = getprec(out);
+    out<<Prec_Low<<"for ("<<forInit<<"; "<<condList<<"; "<<iterList<<") "
+        << "{" <<indent << setprec(0)<<Log::endl<< forBody<<" }" << unindent << setprec(prec);
+}
+
 void IR::MethodCallStatement::dbprint(std::ostream &out) const {
     int prec = getprec(out);
     out << Prec_Low << methodCall << setprec(prec);

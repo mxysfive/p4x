@@ -25,7 +25,6 @@ import stat
 import subprocess
 import sys
 import tempfile
-from pathlib import Path
 from subprocess import PIPE, Popen
 from threading import Thread
 
@@ -223,7 +222,7 @@ def file_name(tmpfolder, base, suffix, ext):
 def process_file(options, argv):
     assert isinstance(options, Options)
 
-    tmpdir = tempfile.mkdtemp(dir=Path(".").absolute())
+    tmpdir = tempfile.mkdtemp(dir=".")
     basename = os.path.basename(options.p4filename)
     base, ext = os.path.splitext(basename)
     dirname = os.path.dirname(options.p4filename)

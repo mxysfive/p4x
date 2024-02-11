@@ -10,9 +10,9 @@
 #include "backends/p4tools/common/lib/arch_spec.h"
 #include "ir/ir.h"
 #include "ir/irutils.h"
-#include "ir/solver.h"
 #include "lib/cstring.h"
 #include "lib/ordered_map.h"
+#include "lib/solver.h"
 
 #include "backends/p4tools/modules/testgen/core/program_info.h"
 #include "backends/p4tools/modules/testgen/core/small_step/cmd_stepper.h"
@@ -37,6 +37,7 @@ const PnaDpdkProgramInfo &PnaDpdkCmdStepper::getProgramInfo() const {
 
 void PnaDpdkCmdStepper::initializeTargetEnvironment(ExecutionState &nextState) const {
     const auto &programInfo = getProgramInfo();
+    const auto *archSpec = TestgenTarget::getArchSpec();
     const auto &target = TestgenTarget::get();
     const auto *programmableBlocks = programInfo.getProgrammableBlocks();
 
@@ -45,7 +46,7 @@ void PnaDpdkCmdStepper::initializeTargetEnvironment(ExecutionState &nextState) c
     size_t blockIdx = 0;
     for (const auto &blockTuple : *programmableBlocks) {
         const auto *typeDecl = blockTuple.second;
-        const auto *archMember = programInfo.getArchSpec().getArchMember(blockIdx);
+        const auto *archMember = archSpec->getArchMember(blockIdx);
         nextState.initializeBlockParams(target, typeDecl, &archMember->blockParams);
         blockIdx++;
     }

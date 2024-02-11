@@ -98,7 +98,7 @@ class Options {
     cstring getCompileCommand() { return compileCommand; }
     cstring getBuildDate() { return buildDate; }
     cstring getBinaryName() { return cstring(binaryName); }
-    virtual void usage();
+    void usage();
 };
 
 }  // namespace Util

@@ -57,12 +57,13 @@ position are the "smallest", which is a reasonable choice.
 class SourcePosition final {
  public:
     /// Creates an invalid source position
-    SourcePosition() = default;
+    SourcePosition() : lineNumber(0), columnNumber(0) {}
 
     SourcePosition(unsigned lineNumber, unsigned columnNumber);
-
-    SourcePosition(const SourcePosition &other) = default;
     SourcePosition &operator=(const SourcePosition &) = default;
+
+    SourcePosition(const SourcePosition &other)
+        : lineNumber(other.lineNumber), columnNumber(other.columnNumber) {}
 
     inline bool operator==(const SourcePosition &rhs) const {
         return columnNumber == rhs.columnNumber && lineNumber == rhs.lineNumber;
@@ -108,8 +109,8 @@ class SourcePosition final {
 
  private:
     // Input sources where this character position is interpreted.
-    unsigned lineNumber = 0;
-    unsigned columnNumber = 0;
+    unsigned lineNumber;
+    unsigned columnNumber;
 };
 
 class InputSources;
@@ -137,7 +138,7 @@ class SourceInfo final {
         this->srcBrief = srcBrief;
     }
     /// Creates an "invalid" SourceInfo
-    SourceInfo() = default;
+    SourceInfo() : sources(nullptr), start(SourcePosition()), end(SourcePosition()) {}
 
     /// Creates a SourceInfo for a 'point' in the source, or invalid
     SourceInfo(const InputSources *sources, SourcePosition point)
@@ -146,13 +147,13 @@ class SourceInfo final {
     SourceInfo(const InputSources *sources, SourcePosition start, SourcePosition end);
 
     SourceInfo(const SourceInfo &other) = default;
-    SourceInfo &operator=(const SourceInfo &other) = default;
     ~SourceInfo() = default;
+    SourceInfo &operator=(const SourceInfo &other) = default;
 
     /**
         A SourceInfo that spans both this and rhs.
         However, if this or rhs is invalid, it is not taken into account */
-    SourceInfo operator+(const SourceInfo &rhs) const {
+    const SourceInfo operator+(const SourceInfo &rhs) const {
         if (!this->isValid()) return rhs;
         if (!rhs.isValid()) return *this;
         SourcePosition s = start.min(rhs.start);
@@ -175,7 +176,7 @@ class SourceInfo final {
 
     void dbprint(std::ostream &out) const { out << this->toDebugString(); }
 
-    cstring toSourceFragment(bool useMarker = true) const;
+    cstring toSourceFragment() const;
     cstring toBriefSourceFragment() const;
     cstring toPositionString() const;
     cstring toSourcePositionData(unsigned *outLineNumber, unsigned *outColumnNumber) const;
@@ -293,8 +294,8 @@ class InputSources final {
        string describing a position in the sources, e.g.:
        int<32> variable;
                ^^^^^^^^ */
-    cstring getSourceFragment(const SourcePosition &position, bool useMarker) const;
-    cstring getSourceFragment(const SourceInfo &position, bool useMarker) const;
+    cstring getSourceFragment(const SourcePosition &position) const;
+    cstring getSourceFragment(const SourceInfo &position) const;
     cstring getBriefSourceFragment(const SourceInfo &position) const;
 
     cstring toDebugString() const;

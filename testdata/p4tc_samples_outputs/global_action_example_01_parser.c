@@ -1,4 +1,8 @@
-#include "global_action_example_01_parser.h"
+
+#include "global_action_example_01_parser.h";
+#include <stdbool.h>
+#include <linux/if_ether.h>
+#include "pna.h"
 
 REGISTER_START()
 REGISTER_TABLE(hdr_md_cpumap, BPF_MAP_TYPE_PERCPU_ARRAY, u32, struct hdr_md, 2)
@@ -7,8 +11,7 @@ REGISTER_END()
 
 static __always_inline int run_parser(struct __sk_buff *skb, struct my_ingress_headers_t *hdr, struct pna_global_metadata *compiler_meta__)
 {
-    struct hdr_md *hdrMd;
-
+    unsigned ebpf_packetOffsetInBits = 0;
     unsigned ebpf_packetOffsetInBits_save = 0;
     ParserError_t ebpf_errorCode = NoError;
     void* pkt = ((void*)(long)skb->data);
@@ -19,13 +22,13 @@ static __always_inline int run_parser(struct __sk_buff *skb, struct my_ingress_h
     u32 pkt_len = skb->len;
 
     struct my_ingress_metadata_t *meta;
+    struct hdr_md *hdrMd;
 
     hdrMd = BPF_MAP_LOOKUP_ELEM(hdr_md_cpumap, &ebpf_zero);
     if (!hdrMd)
         return TC_ACT_SHOT;
     __builtin_memset(hdrMd, 0, sizeof(struct hdr_md));
 
-    unsigned ebpf_packetOffsetInBits = 0;
     hdr = &(hdrMd->cpumap_hdr);
     meta = &(hdrMd->cpumap_usermeta);
     {
@@ -67,10 +70,10 @@ static __always_inline int run_parser(struct __sk_buff *skb, struct my_ingress_h
             hdr->ipv4.hdrChecksum = (u16)((load_half(pkt, BYTES(ebpf_packetOffsetInBits))));
             ebpf_packetOffsetInBits += 16;
 
-            __builtin_memcpy(&hdr->ipv4.srcAddr, pkt + BYTES(ebpf_packetOffsetInBits), 4);
+            hdr->ipv4.srcAddr = (u32)((load_word(pkt, BYTES(ebpf_packetOffsetInBits))));
             ebpf_packetOffsetInBits += 32;
 
-            __builtin_memcpy(&hdr->ipv4.dstAddr, pkt + BYTES(ebpf_packetOffsetInBits), 4);
+            hdr->ipv4.dstAddr = (u32)((load_word(pkt, BYTES(ebpf_packetOffsetInBits))));
             ebpf_packetOffsetInBits += 32;
 
             hdr->ipv4.ebpf_valid = 1;
@@ -114,13 +117,11 @@ static __always_inline int run_parser(struct __sk_buff *skb, struct my_ingress_h
     }
 
     accept:
-    hdrMd->ebpf_packetOffsetInBits = ebpf_packetOffsetInBits;
     return -1;
 }
 
 SEC("classifier/tc-parse")
 int tc_parse_func(struct __sk_buff *skb) {
-    struct pna_global_metadata *compiler_meta__ = (struct pna_global_metadata *) skb->cb;
     struct hdr_md *hdrMd;
     struct my_ingress_headers_t *hdr;
     int ret = -1;

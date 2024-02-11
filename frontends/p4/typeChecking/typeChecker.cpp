@@ -16,8 +16,6 @@ limitations under the License.
 
 #include "typeChecker.h"
 
-#include <boost/format.hpp>
-
 #include "frontends/common/constantFolding.h"
 #include "frontends/common/resolveReferences/resolveReferences.h"
 #include "frontends/p4/coreLibrary.h"
@@ -161,21 +159,12 @@ Visitor::profile_t TypeInference::init_apply(const IR::Node *node) {
 }
 
 void TypeInference::end_apply(const IR::Node *node) {
-    BUG_CHECK(!readOnly || node == initialNode,
-              "At this point in the compilation typechecking should not infer new types anymore, "
-              "but it did.");
+    if (readOnly && !(*node == *initialNode)) {
+        BUG("At this point in the compilation typechecking "
+            "should not infer new types anymore, but it did.");
+    }
     typeMap->updateMap(node);
     if (node->is<IR::P4Program>()) LOG3("Typemap: " << std::endl << typeMap);
-    Transform::end_apply(node);
-}
-
-const IR::Node *TypeInference::apply_visitor(const IR::Node *orig, const char *name) {
-    const auto *transformed = Transform::apply_visitor(orig, name);
-    BUG_CHECK(!readOnly || orig == transformed,
-              "At this point in the compilation typechecking should not infer new types anymore, "
-              "but it did: node %1% changed to %2%",
-              orig, transformed);
-    return transformed;
 }
 
 TypeInference *TypeInference::clone() const {
@@ -905,7 +894,15 @@ const IR::Node *TypeInference::postorder(IR::Annotation *annotation) {
     }
     return annotation;
 }
+const IR::Node *TypeInference::postorder(IR::RegisterDeclaration *decl) {
+    //todo add typechecking
+    return decl;
+}
 
+const IR::Node *TypeInference::postorder(IR::RegisterActionDeclaration *decl) {
+    //todo add typechecking
+    return decl;
+}
 const IR::Node *TypeInference::postorder(IR::Declaration_Constant *decl) {
     if (done()) return decl;
     auto type = getTypeType(decl->type);
@@ -1504,87 +1501,23 @@ const IR::Node *TypeInference::postorder(IR::Type_Set *type) {
     return type;
 }
 
-/// get size int bits required to represent given constant
-static int getConstantsRepresentationSize(big_int val, bool isSigned) {
-    if (val < 0) {
-        val = -val;
-    }
-    int cnt = 0;
-    while (val > 0) {
-        ++cnt;
-        val >>= 1;
-    }
-    return cnt + int(isSigned);
-}
-
-const IR::Type_Bits *TypeInference::checkUnderlyingEnumType(const IR::Type *enumType) {
-    const auto *resolvedType = getTypeType(enumType);
-    CHECK_NULL(resolvedType);
-    if (const auto *type = resolvedType->to<IR::Type_Bits>()) {
-        return type;
-    }
-    std::string note;
-    if (resolvedType->is<IR::Type_InfInt>()) {
-        note = "; note that the used type is unsized integral type";
-    } else if (resolvedType->is<IR::Type_Newtype>()) {
-        note = "; note that type-declared types are not allowed even if they are fixed-size";
-    }
-    typeError("%1%: Illegal type for enum; only bit<> and int<> are allowed%2%", enumType, note);
-    return nullptr;
-}
-
-/// Check if the value initializer fits into the underlying enum type. Emits error and returns false
-/// if it does not fit. Returns true if it fits.
-static bool checkEnumValueInitializer(const IR::Type_Bits *type, const IR::Expression *initializer,
-                                      const IR::Type_SerEnum *serEnum,
-                                      const IR::SerEnumMember *member) {
-    // validate the constant fits -- non-fitting enum constants should produce error
-    if (const auto *constant = initializer->to<IR::Constant>()) {
-        // signed values are two's complement, so [-2^(n-1)..2^(n-1)-1]
-        big_int low = type->isSigned ? -(big_int(1) << type->size - 1) : big_int(0);
-        big_int high = (big_int(1) << (type->isSigned ? type->size - 1 : type->size)) - 1;
-
-        if (constant->value < low || constant->value > high) {
-            int required = getConstantsRepresentationSize(constant->value, type->isSigned);
-            std::string extraMsg;
-            if (!type->isSigned && constant->value < low) {
-                extraMsg =
-                    str(boost::format(
-                            "the value %1% is negative, but the underlying type %2% is unsigned") %
-                        constant->value % type->toString());
-            } else {
-                extraMsg =
-                    str(boost::format("the value %1% requires %2% bits but the underlying "
-                                      "%3% type %4% only contains %5% bits") %
-                        constant->value % required % (type->isSigned ? "signed" : "unsigned") %
-                        type->toString() % type->size);
-            }
-            ::error(ErrorType::ERR_TYPE_ERROR,
-                    "%1%: Serialized enum constant value %2% is out of bounds of the underlying "
-                    "type %3%; %4%",
-                    member, constant->value, serEnum->type, extraMsg);
-            return false;
-        }
-    }
-    return true;
-}
-
 const IR::Node *TypeInference::postorder(IR::SerEnumMember *member) {
     /*
       The type of the member is initially set in the Type_SerEnum preorder visitor.
       Here we check additional constraints and we may correct the member.
       if (done()) return member;
     */
-    const auto *serEnum = findContext<IR::Type_SerEnum>();
+    auto serEnum = findContext<IR::Type_SerEnum>();
     CHECK_NULL(serEnum);
-    const auto *type = checkUnderlyingEnumType(serEnum->type);
-    if (!type || !checkEnumValueInitializer(type, member->value, serEnum, member)) {
+    auto type = getTypeType(serEnum->type);
+    if (!type->is<IR::Type_Bits>()) {
+        typeError("%1%: Illegal type for enum; only bit<> and int<> are allowed", serEnum->type);
         return member;
     }
-    const auto *exprType = getType(member->value);
-    auto *tvs = unifyCast(member, type, exprType,
-                          "Enum member '%1%' has type '%2%' and not the expected type '%3%'",
-                          {member, exprType, type});
+    auto exprType = getType(member->value);
+    auto tvs = unifyCast(member, type, exprType,
+                         "Enum member '%1%' has type '%2%' and not the expected type '%3%'",
+                         {member, exprType, type});
     if (tvs == nullptr)
         // error already signalled
         return member;
@@ -4018,6 +3951,27 @@ const IR::Node *TypeInference::postorder(IR::IfStatement *conditional) {
         typeError("Condition of %1% does not evaluate to a bool but %2%", conditional,
                   type->toString());
     return conditional;
+}
+
+const IR::Node *TypeInference::postorder(IR::WhileStatement* wloop) {
+    LOG3("TI Visiting " << dbp(getOriginal()));
+    auto type = getType(wloop->condition);
+    if (type == nullptr) return wloop;
+    if (!type->is<IR::Type_Boolean>())
+        typeError("Condition of %1% does not evaluate to a bool but %2%", wloop,
+                  type->toString());
+    return wloop;
+}
+
+const IR::Node *TypeInference::postorder(IR::ForStatement* forloop) {
+    LOG3("TI Visiting " << dbp(getOriginal()));
+
+    for(auto expr = forloop->condList->begin(); expr != forloop->condList->end(); expr++) {
+        auto type = getType(*expr);
+        if (!type->is<IR::Type_Boolean>())
+            typeError("Condition of %1% does not evaluate to a bool but %2%", forloop, type->toString());
+    }
+    return forloop;
 }
 
 const IR::Node *TypeInference::postorder(IR::SwitchStatement *stat) {

@@ -21,7 +21,6 @@
 #include "backends/p4tools/common/lib/taint.h"
 #include "backends/p4tools/common/lib/trace_event.h"
 #include "backends/p4tools/common/lib/variables.h"
-#include "frontends/p4/optimizeExpressions.h"
 #include "ir/id.h"
 #include "ir/indexed_vector.h"
 #include "ir/irutils.h"
@@ -123,18 +122,10 @@ std::optional<const Continuation::Command> ExecutionState::getNextCmd() const {
 }
 
 const IR::Expression *ExecutionState::get(const IR::StateVariable &var) const {
-    auto varType = resolveType(var->type);
-
-    // In some cases, we may reference a complex expression. Convert it to a struct expression.
-    if (varType->is<IR::Type_StructLike>() || varType->to<IR::Type_Stack>()) {
-        return convertToComplexExpression(var);
-    }
-
     // TODO: This is a convoluted (and expensive?) check because struct members are not directly
     // associated with a header. We should be using runtime objects instead of flat assignments.
     if (const auto *member = var->to<IR::Member>()) {
-        auto memberType = resolveType(member->expr->type);
-        if (memberType->is<IR::Type_Header>() && member->member != ToolsVariables::VALID) {
+        if (member->expr->type->is<IR::Type_Header>() && member->member != ToolsVariables::VALID) {
             // If we are setting the member of a header, we need to check whether the
             // header is valid.
             // If the header is invalid, the get returns a tainted expression.
@@ -148,7 +139,7 @@ const IR::Expression *ExecutionState::get(const IR::StateVariable &var) const {
                 isTainted = !validBool->value;
             }
             if (isTainted) {
-                return ToolsVariables::getTaintExpression(varType);
+                return ToolsVariables::getTaintExpression(var->type);
             }
         }
     }
@@ -170,46 +161,15 @@ void ExecutionState::markVisited(const IR::Node *node) {
     if (node->is<IR::Entry>() && !coverageOptions.coverTableEntries) {
         return;
     }
-    // Do not add actions, if coverActions is not toggled.
-    if (node->is<IR::P4Action>() && !coverageOptions.coverActions) {
-        return;
-    }
     visitedNodes.emplace(node);
 }
 
 const P4::Coverage::CoverageSet &ExecutionState::getVisited() const { return visitedNodes; }
 
-/// Compare types, considering Extracted_Varbit and bits equal if the (real/extracted) sizes are
-/// equal. This is because the packet expression can be something like 0 ++
-/// (Extracted_Varbit<N>)pkt_var. This expression is typed as bit<N>, but the optimizer removes the
-/// 0 ++ and makes it into Extracted_Varbit type.
-/// TODO: Maybe there is a better way to handle varbit that could allow us to avoid this.
-static bool typeEquivSansVarbit(const IR::Type *a, const IR::Type *b) {
-    if (a->equiv(*b)) {
-        return true;
-    }
-    const auto *abit = a->to<IR::Type_Bits>();
-    const auto *avar = a->to<IR::Extracted_Varbits>();
-    const auto *bbit = b->to<IR::Type_Bits>();
-    const auto *bvar = b->to<IR::Extracted_Varbits>();
-    return (abit && bvar && abit->width_bits() == bvar->width_bits()) ||
-           (avar && bbit && avar->width_bits() == bbit->width_bits());
-}
-
 void ExecutionState::set(const IR::StateVariable &var, const IR::Expression *value) {
-    const auto *type = value->type;
-    BUG_CHECK(type && !type->is<IR::Type_Unknown>(), "Cannot set value with unspecified type: %1%",
-              value);
     if (getProperty<bool>("inUndefinedState")) {
         // If we are in an undefined state, the variable we set is tainted.
-        value = ToolsVariables::getTaintExpression(type);
-    } else {
-        value = P4::optimizeExpression(value);
-        BUG_CHECK(value->type && !value->type->is<IR::Type_Unknown>(),
-                  "The P4 expression optimizer stripped a type of %1% (was %2%)", value, type);
-        BUG_CHECK(typeEquivSansVarbit(type, value->type),
-                  "The P4 expression optimizer had changed type of %1% (%2% -> %3%)", value, type,
-                  value->type);
+        value = ToolsVariables::getTaintExpression(value->type);
     }
     env.set(var, value);
 }
@@ -263,8 +223,9 @@ TestObjectMap ExecutionState::getTestObjectCategory(cstring category) const {
 void ExecutionState::deleteTestObject(cstring category, cstring objectLabel) {
     auto it = testObjects.find(category);
     if (it != testObjects.end()) {
-        it->second.erase(objectLabel);
+        return;
     }
+    it->second.erase(objectLabel);
 }
 
 void ExecutionState::deleteTestObjectCategory(cstring category) { testObjects.erase(category); }

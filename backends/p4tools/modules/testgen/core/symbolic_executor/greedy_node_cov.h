@@ -5,7 +5,7 @@
 #include <optional>
 #include <vector>
 
-#include "ir/solver.h"
+#include "lib/solver.h"
 #include "midend/coverage.h"
 
 #include "backends/p4tools/modules/testgen/core/program_info.h"

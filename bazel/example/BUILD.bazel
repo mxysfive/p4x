@@ -1,5 +1,5 @@
 filegroup(
-  name = "ir_extension",
+  name = "ir_extensions",
   srcs = glob(["*.def"]),
   visibility = ["//visibility:public"],  # So p4c can compile these.
 )

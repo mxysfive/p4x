@@ -10,8 +10,8 @@
 #include "backends/p4tools/common/core/target.h"
 #include "backends/p4tools/common/lib/arch_spec.h"
 #include "ir/ir.h"
-#include "ir/solver.h"
 #include "ir/vector.h"
+#include "lib/solver.h"
 
 #include "backends/p4tools/modules/testgen/core/program_info.h"
 #include "backends/p4tools/modules/testgen/core/small_step/cmd_stepper.h"
@@ -44,6 +44,13 @@ class TestgenTarget : public Target {
     static ExprStepper *getExprStepper(ExecutionState &state, AbstractSolver &solver,
                                        const ProgramInfo &programInfo);
 
+    /// A vector that maps the architecture parameters of each pipe to the corresponding
+    /// global architecture variables. For example, this map specifies which parameter of each pipe
+    /// refers to the input header.
+    // The arch map needs to be public to be subclassed.
+    /// @returns a reference to the architecture map defined in this target
+    static const ArchSpec *getArchSpec();
+
  protected:
     /// @see @initProgram.
     const ProgramInfo *initProgramImpl(const IR::P4Program *program) const;
@@ -65,7 +72,19 @@ class TestgenTarget : public Target {
     virtual ExprStepper *getExprStepperImpl(ExecutionState &state, AbstractSolver &solver,
                                             const ProgramInfo &programInfo) const = 0;
 
+    /// @see getArchSpec
+    [[nodiscard]] virtual const ArchSpec *getArchSpecImpl() const = 0;
+
+    /// Utility function. Converts the list of arguments @inputArgs to a list of type declarations
+    ///  and appends the result to @v. Any names appearing in the arguments are
+    /// resolved with @ns.
+    static void argumentsToTypeDeclarations(const IR::IGeneralNamespace *ns,
+                                            const IR::Vector<IR::Argument> *inputArgs,
+                                            std::vector<const IR::Type_Declaration *> &resultDecls);
+
     explicit TestgenTarget(std::string deviceName, std::string archName);
+
+ private:
 };
 
 }  // namespace P4Tools::P4Testgen

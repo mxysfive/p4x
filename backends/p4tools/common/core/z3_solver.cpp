@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <exception>
 #include <iterator>
+#include <list>
 #include <map>
 #include <string>
 #include <utility>
@@ -153,10 +154,6 @@ z3::sort Z3Solver::toSort(const IR::Type *type) {
 
     if (const auto *bits = type->to<IR::Type_Bits>()) {
         return ctx().bv_sort(bits->width_bits());
-    }
-
-    if (type->is<IR::Type_String>()) {
-        return ctx().string_sort();
     }
 
     BUG("Z3Solver: unimplemented type %1%: %2% ", type->node_type_name(), type);
@@ -538,7 +535,7 @@ bool Z3Translator::preorder(const IR::BoolLiteral *boolLiteral) {
 }
 
 bool Z3Translator::preorder(const IR::StringLiteral *stringLiteral) {
-    result = solver.ctx().string_val(stringLiteral->value);
+    result = solver.ctx().string_const(stringLiteral->value);
     return false;
 }
 

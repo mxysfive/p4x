@@ -122,38 +122,38 @@ action encap_one_tunnel_layer_ipv4 args instanceof encap_one_tunnel_layer_ipv4_a
 	mov h.mac.type 0x800
 	validate h.ipv4_0
 	mov m.MainControlT_tmp h.ipv4_0.version_ihl
-	and m.MainControlT_tmp 0xF
+	and m.MainControlT_tmp 0xF0
 	mov h.ipv4_0.version_ihl m.MainControlT_tmp
-	or h.ipv4_0.version_ihl 0x40
+	or h.ipv4_0.version_ihl 0x4
 	mov m.MainControlT_tmp_0 h.ipv4_0.version_ihl
-	and m.MainControlT_tmp_0 0xF0
+	and m.MainControlT_tmp_0 0xF
 	mov h.ipv4_0.version_ihl m.MainControlT_tmp_0
-	or h.ipv4_0.version_ihl 0x5
+	or h.ipv4_0.version_ihl 0x50
 	mov m.MainControlT_tmp_1 h.ipv4_0.dscp_ecn
-	and m.MainControlT_tmp_1 0x3
+	and m.MainControlT_tmp_1 0xC0
 	mov h.ipv4_0.dscp_ecn m.MainControlT_tmp_1
-	or h.ipv4_0.dscp_ecn 0x14
+	or h.ipv4_0.dscp_ecn 0x5
 	mov m.MainControlT_tmp_2 h.ipv4_0.dscp_ecn
-	and m.MainControlT_tmp_2 0xFC
+	and m.MainControlT_tmp_2 0x3F
 	mov h.ipv4_0.dscp_ecn m.MainControlT_tmp_2
 	or h.ipv4_0.dscp_ecn 0x0
 	mov h.ipv4_0.length 0x14
 	add h.ipv4_0.length m.local_metadata_L2_packet_len_bytes
 	mov h.ipv4_0.identification 0x0
 	mov m.MainControlT_tmp_3 h.ipv4_0.rsvd_df_mf_frag_off
-	and m.MainControlT_tmp_3 0x7FFF
+	and m.MainControlT_tmp_3 0xFFFE
 	mov h.ipv4_0.rsvd_df_mf_frag_off m.MainControlT_tmp_3
 	or h.ipv4_0.rsvd_df_mf_frag_off 0x0
 	mov m.MainControlT_tmp_4 h.ipv4_0.rsvd_df_mf_frag_off
-	and m.MainControlT_tmp_4 0xBFFF
+	and m.MainControlT_tmp_4 0xFFFD
 	mov h.ipv4_0.rsvd_df_mf_frag_off m.MainControlT_tmp_4
 	or h.ipv4_0.rsvd_df_mf_frag_off 0x0
 	mov m.MainControlT_tmp_5 h.ipv4_0.rsvd_df_mf_frag_off
-	and m.MainControlT_tmp_5 0xDFFF
+	and m.MainControlT_tmp_5 0xFFFB
 	mov h.ipv4_0.rsvd_df_mf_frag_off m.MainControlT_tmp_5
 	or h.ipv4_0.rsvd_df_mf_frag_off 0x0
 	mov m.MainControlT_tmp_6 h.ipv4_0.rsvd_df_mf_frag_off
-	and m.MainControlT_tmp_6 0xE000
+	and m.MainControlT_tmp_6 0x7
 	mov h.ipv4_0.rsvd_df_mf_frag_off m.MainControlT_tmp_6
 	or h.ipv4_0.rsvd_df_mf_frag_off 0x0
 	mov h.ipv4_0.ttl 0x40

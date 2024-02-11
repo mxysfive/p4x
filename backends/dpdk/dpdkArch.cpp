@@ -553,8 +553,8 @@ const IR::Node *AlignHdrMetaField::preorder(IR::Type_StructLike *st) {
                 fieldObj.headerStr = st->name.name;
                 fieldObj.modifiedWidth = size_sum_so_far;
                 fieldObj.fieldWidth = s->second.fieldWidth;
-                fieldObj.lsb = size_sum_so_far - (offset + fieldObj.fieldWidth);
-                fieldObj.msb = fieldObj.lsb + s->second.fieldWidth - 1;
+                fieldObj.lsb = offset;
+                fieldObj.msb = offset + s->second.fieldWidth - 1;
                 fieldObj.offset = offset;
                 structure->hdrFieldInfoList[s->first].push_back(fieldObj);
                 offset += s->second.fieldWidth;
@@ -620,7 +620,8 @@ const IR::Node *AlignHdrMetaField::preorder(IR::Member *m) {
                two different headers have field with same name */
             if (memVec.headerStr != hdrStrName) continue;
             auto mem = new IR::Member(m->expr, IR::ID(memVec.modifiedName));
-            auto sliceMem = new IR::Slice(mem->clone(), memVec.msb, memVec.lsb);
+            auto sliceMem =
+                new IR::Slice(mem->clone(), (memVec.offset + memVec.fieldWidth - 1), memVec.offset);
             return sliceMem;
         }
     }
@@ -2639,7 +2640,7 @@ void CollectAddOnMissTable::postorder(const IR::P4Table *t) {
         ::error(ErrorType::ERR_UNEXPECTED,
                 "%1%: add_on_miss property is defined, "
                 "but default_action not specificed for table %2%",
-                add_on_miss, t->name);
+                default_action, t->name);
         return;
     }
     if (default_action->value->is<IR::ExpressionValue>()) {

@@ -3,7 +3,6 @@
 
 #include <gtest/gtest.h>
 
-#include <functional>
 #include <optional>
 #include <string>
 
@@ -31,14 +30,10 @@ class P4ToolsTestCase {
                                                           std::string archName,
                                                           const std::string &source);
 
-    explicit P4ToolsTestCase(const IR::P4Program &program);
-
-    [[nodiscard]] const IR::P4Program &getProgram() const;
+    /// The output of the compiler's mid end.
+    const IR::P4Program *program;
 
  private:
-    /// The output of the compiler's mid end.
-    std::reference_wrapper<const IR::P4Program> program;
-
     /// Ensures target plug-ins are initialized.
     static void ensureInit();
 };

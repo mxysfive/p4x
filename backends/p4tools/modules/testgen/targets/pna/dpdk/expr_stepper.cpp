@@ -1,6 +1,6 @@
 #include "backends/p4tools/modules/testgen/targets/pna/dpdk/expr_stepper.h"
 
-#include "ir/solver.h"
+#include "lib/solver.h"
 
 #include "backends/p4tools/modules/testgen/core/externs.h"
 #include "backends/p4tools/modules/testgen/core/program_info.h"

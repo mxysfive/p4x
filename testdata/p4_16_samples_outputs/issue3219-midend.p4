@@ -1,6 +1,6 @@
 control c(out bit<4> result) {
     @hidden action issue3219l13() {
-        result = 4w1;
+        result = (bit<4>)(int)1;
     }
     @hidden table tbl_issue3219l13 {
         actions = {

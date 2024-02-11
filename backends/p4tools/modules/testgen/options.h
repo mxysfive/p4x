@@ -69,7 +69,7 @@ class TestgenOptions : public AbstractP4cToolOptions {
     std::vector<std::pair<int, int>> permittedPortRanges;
 
     /// Enforces the test generation of tests with mandatory output packet.
-    bool outputPacketOnly = false;
+    bool withOutputPacket = false;
 
     /// Add conditions defined in assert/assume to the path conditions.
     /// Only tests which satisfy these conditions can be generated. This is active by default.
@@ -79,21 +79,11 @@ class TestgenOptions : public AbstractP4cToolOptions {
     /// This will either produce no tests or only tests that contain counter examples.
     bool assertionModeEnabled = false;
 
-    /// Specifies general options which IR nodes to track for coverage in the targeted P4 program.
+    /// Specifies, which IR nodes to track for coverage in the targeted P4 program.
     /// Multiple options are possible. Currently supported: STATEMENTS, TABLE_ENTRIES.
     P4::Coverage::CoverageOptions coverageOptions;
 
-    /// Indicates that coverage tracking is enabled for some coverage criteria. This is used for
-    /// sanity checking and it also affects information printed to output.
-    bool hasCoverageTracking = false;
-
-    /// Specifies minimum coverage that needs to be achieved for P4Testgen to exit successfully.
-    float minCoverage = 0;
-
     const char *getIncludePath() override;
-
- protected:
-    bool validateOptions() const override;
 
  private:
     TestgenOptions();

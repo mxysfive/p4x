@@ -24,12 +24,11 @@
 #include "backends/p4tools/modules/testgen/lib/test_backend.h"
 #include "backends/p4tools/modules/testgen/lib/test_object.h"
 #include "backends/p4tools/modules/testgen/options.h"
+#include "backends/p4tools/modules/testgen/targets/bmv2/backend/metadata/metadata.h"
+#include "backends/p4tools/modules/testgen/targets/bmv2/backend/protobuf/protobuf.h"
+#include "backends/p4tools/modules/testgen/targets/bmv2/backend/ptf/ptf.h"
+#include "backends/p4tools/modules/testgen/targets/bmv2/backend/stf/stf.h"
 #include "backends/p4tools/modules/testgen/targets/bmv2/program_info.h"
-#include "backends/p4tools/modules/testgen/targets/bmv2/test_backend/metadata.h"
-#include "backends/p4tools/modules/testgen/targets/bmv2/test_backend/protobuf.h"
-#include "backends/p4tools/modules/testgen/targets/bmv2/test_backend/protobuf_ir.h"
-#include "backends/p4tools/modules/testgen/targets/bmv2/test_backend/ptf.h"
-#include "backends/p4tools/modules/testgen/targets/bmv2/test_backend/stf.h"
 #include "backends/p4tools/modules/testgen/targets/bmv2/test_spec.h"
 
 namespace P4Tools::P4Testgen::Bmv2 {
@@ -37,7 +36,7 @@ namespace P4Tools::P4Testgen::Bmv2 {
 const big_int Bmv2TestBackend::ZERO_PKT_VAL = 0x2000000;
 const big_int Bmv2TestBackend::ZERO_PKT_MAX = 0xffffffff;
 const std::set<std::string> Bmv2TestBackend::SUPPORTED_BACKENDS = {"PTF", "STF", "PROTOBUF",
-                                                                   "PROTOBUF_IR", "METADATA"};
+                                                                   "METADATA"};
 
 Bmv2TestBackend::Bmv2TestBackend(const ProgramInfo &programInfo, SymbolicExecutor &symbex,
                                  const std::filesystem::path &testPath)
@@ -57,12 +56,7 @@ Bmv2TestBackend::Bmv2TestBackend(const ProgramInfo &programInfo, SymbolicExecuto
     } else if (testBackendString == "STF") {
         testWriter = new STF(testPath, seed);
     } else if (testBackendString == "PROTOBUF") {
-        ::warning(
-            "The PROTOBUF test back end is deprecated. "
-            "Please use the PROTOBUF_IR test back end, which uses P4_PDPI.");
         testWriter = new Protobuf(testPath, seed);
-    } else if (testBackendString == "PROTOBUF_IR") {
-        testWriter = new ProtobufIr(testPath, seed);
     } else if (testBackendString == "METADATA") {
         testWriter = new Metadata(testPath, seed);
     } else {
@@ -112,7 +106,9 @@ const TestSpec *Bmv2TestBackend::createTestSpec(const ExecutionState *executionS
         auto *metadataCollection = new MetadataCollection();
         const auto *bmv2ProgInfo = programInfo.checkedTo<Bmv2V1ModelProgramInfo>();
         const auto *localMetadataVar = bmv2ProgInfo->getBlockParam("Parser", 2);
-        const auto &flatFields = executionState->getFlatFields(localMetadataVar, {});
+        const auto *localMetadataType = executionState->resolveType(localMetadataVar->type);
+        const auto &flatFields = executionState->getFlatFields(
+            localMetadataVar, localMetadataType->checkedTo<IR::Type_Struct>(), {});
         for (const auto &fieldRef : flatFields) {
             const auto *fieldVal = completedModel->evaluate(executionState->get(fieldRef), true);
             // Try to remove the leading internal name for the metadata field.

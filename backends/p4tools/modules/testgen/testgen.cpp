@@ -2,6 +2,7 @@
 
 #include <cstdlib>
 #include <filesystem>
+#include <iostream>
 #include <optional>
 #include <string>
 #include <utility>
@@ -9,9 +10,9 @@
 #include "backends/p4tools/common/core/z3_solver.h"
 #include "backends/p4tools/common/lib/util.h"
 #include "frontends/common/parser_options.h"
-#include "ir/solver.h"
 #include "lib/cstring.h"
 #include "lib/error.h"
+#include "lib/solver.h"
 
 #include "backends/p4tools/modules/testgen/core/program_info.h"
 #include "backends/p4tools/modules/testgen/core/symbolic_executor/depth_first.h"
@@ -74,7 +75,7 @@ int generateAbstractTests(const TestgenOptions &testgenOptions, const ProgramInf
     symbex.run(callBack);
 
     // Emit a performance report, if desired.
-    printPerformanceReport(testPath);
+    testBackend->printPerformanceReport(true);
 
     // Do not print this warning if assertion mode is enabled.
     if (testBackend->getTestCount() == 0 && !testgenOptions.assertionModeEnabled) {
@@ -82,20 +83,15 @@ int generateAbstractTests(const TestgenOptions &testgenOptions, const ProgramInf
             "Unable to generate tests with given inputs. Double-check provided options and "
             "parameters.\n");
     }
-    if (testBackend->getCoverage() < testgenOptions.minCoverage) {
-        ::error("The tests did not achieve requested coverage of %1%, the coverage is %2%.",
-                testgenOptions.minCoverage, testBackend->getCoverage());
-    }
-
     return ::errorCount() == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
-int Testgen::mainImpl(const CompilerResult &compilerResult) {
+int Testgen::mainImpl(const IR::P4Program *program) {
     // Register all available testgen targets.
     // These are discovered by CMAKE, which fills out the register.h.in file.
     registerTestgenTargets();
 
-    const auto *programInfo = TestgenTarget::initProgram(&compilerResult.getProgram());
+    const auto *programInfo = TestgenTarget::initProgram(program);
     if (programInfo == nullptr) {
         ::error("Program not supported by target device and architecture.");
         return EXIT_FAILURE;

@@ -36,8 +36,6 @@ class ICompileContext {
 /// Compilation contexts can be nested to allow composing programs without
 /// intermingling their stack.
 struct CompileContextStack final {
-    CompileContextStack() = delete;
-
     /// @return the current compilation context (i.e., the top of the
     /// compilation context stack), cast to the requested type. If the current
     /// compilation context is of the wrong type, or the stack is empty, an
@@ -66,6 +64,8 @@ struct CompileContextStack final {
     static void push(ICompileContext *context);
     static void pop();
     static StackType &getStack();
+
+    CompileContextStack() = delete;
 };
 
 /// A RAII helper which pushes a compilation context onto the stack when it's
@@ -82,9 +82,8 @@ struct AutoCompileContext {
 /// BaseCompileContext.
 class BaseCompileContext : public ICompileContext {
  protected:
-    BaseCompileContext() = default;
-    BaseCompileContext(const BaseCompileContext &other) = default;
-    BaseCompileContext &operator=(const BaseCompileContext &other) = default;
+    BaseCompileContext();
+    BaseCompileContext(const BaseCompileContext &other);
 
  public:
     /// @return the current compilation context, which must inherit from
@@ -93,9 +92,6 @@ class BaseCompileContext : public ICompileContext {
 
     /// @return the error reporter for this compilation context.
     virtual ErrorReporter &errorReporter();
-
-    /// @return the default diagnostic action for calls to `::info()`.
-    virtual DiagnosticAction getDefaultInfoDiagnosticAction();
 
     /// @return the default diagnostic action for calls to `::warning()`.
     virtual DiagnosticAction getDefaultWarningDiagnosticAction();

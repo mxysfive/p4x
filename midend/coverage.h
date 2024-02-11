@@ -21,17 +21,10 @@ struct SourceIdCmp {
     bool operator()(const IR::Node *s1, const IR::Node *s2) const;
 };
 
-/// Specifies general options and which IR nodes to track with this particular visitor.
+/// Specifies, which IR nodes to track with this particular visitor.
 struct CoverageOptions {
-    /// Cover IR::Statement.
     bool coverStatements = false;
-    /// Cover IR::Entry
     bool coverTableEntries = false;
-    /// Cover IR::P4Action
-    bool coverActions = false;
-
-    /// Skip tests which do not increase coverage.
-    bool onlyCoveringTests = false;
 };
 
 /// Set of nodes used for coverage purposes. Compares nodes based on their
@@ -54,9 +47,6 @@ class CollectNodes : public Inspector {
 
     /// Table entry coverage.
     bool preorder(const IR::Entry *entry) override;
-
-    /// Actions coverage.
-    bool preorder(const IR::P4Action *act) override;
 
  public:
     explicit CollectNodes(CoverageOptions coverageOptions);

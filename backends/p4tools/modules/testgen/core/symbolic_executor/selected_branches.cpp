@@ -6,9 +6,9 @@
 #include <utility>
 #include <vector>
 
-#include "ir/solver.h"
 #include "lib/error.h"
 #include "lib/exceptions.h"
+#include "lib/solver.h"
 
 #include "backends/p4tools/modules/testgen/core/program_info.h"
 #include "backends/p4tools/modules/testgen/core/symbolic_executor/symbolic_executor.h"
@@ -48,7 +48,7 @@ void SelectedBranches::runImpl(const Callback &callBack, ExecutionStateReference
             executionState = *next;
         }
         if (executionState.get().isTerminal()) {
-            // We've reached the end of the program. Call back and end execution.
+            // We've reached the end of the program. Call back and (if desired) end execution.
             handleTerminalState(callBack, executionState);
             if (!selectedBranches.empty()) {
                 ::warning(

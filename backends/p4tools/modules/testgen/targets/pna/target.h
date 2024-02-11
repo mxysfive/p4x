@@ -7,7 +7,7 @@
 
 #include "backends/p4tools/common/lib/arch_spec.h"
 #include "ir/ir.h"
-#include "ir/solver.h"
+#include "lib/solver.h"
 
 #include "backends/p4tools/modules/testgen/core/program_info.h"
 #include "backends/p4tools/modules/testgen/core/symbolic_executor/symbolic_executor.h"
@@ -38,8 +38,12 @@ class PnaDpdkTestgenTarget : public TestgenTarget {
     PnaDpdkExprStepper *getExprStepperImpl(ExecutionState &state, AbstractSolver &solver,
                                            const ProgramInfo &programInfo) const override;
 
+    [[nodiscard]] const ArchSpec *getArchSpecImpl() const override;
+
  private:
     PnaDpdkTestgenTarget();
+
+    static const ArchSpec ARCH_SPEC;
 };
 
 }  // namespace P4Tools::P4Testgen::Pna

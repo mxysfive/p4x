@@ -116,41 +116,15 @@ struct FrontendTestCase {
     /// Create a test case that only requires the frontend to run.
     static std::optional<FrontendTestCase> create(
         const std::string &source, CompilerOptions::FrontendVersion langVersion = defaultVersion,
-        const P4::ParseAnnotations &parseAnnotations = P4::ParseAnnotations());
+        P4::ParseAnnotations parseAnnotations = P4::ParseAnnotations());
 
     static std::optional<FrontendTestCase> create(const std::string &source,
-                                                  const P4::ParseAnnotations &parseAnnotations) {
+                                                  P4::ParseAnnotations parseAnnotations) {
         return create(source, defaultVersion, parseAnnotations);
     }
 
     /// The output of the frontend.
     const IR::P4Program *program;
-};
-
-/// Redirects std::cerr temporarily
-struct RedirectStderr {
-    RedirectStderr() : old(std::cerr.rdbuf(stream.rdbuf())) {}
-    ~RedirectStderr() { reset(); }
-
-    std::string str() { return stream.str(); }
-
-    bool contains(std::string other) { return stream.str().find(other) != std::string::npos; }
-
-    void reset() {
-        if (old) {
-            std::cerr.rdbuf(old);
-        }
-        old = nullptr;
-    }
-
-    void dumpAndReset() {
-        reset();
-        std::cerr << stream.str();
-    }
-
- private:
-    std::stringstream stream;
-    std::streambuf *old = nullptr;
 };
 
 }  // namespace Test

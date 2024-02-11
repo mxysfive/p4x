@@ -6,7 +6,9 @@
 #include <vector>
 
 #include "backends/p4tools/common/core/z3_solver.h"
+#include "backends/p4tools/common/lib/model.h"
 #include "ir/declaration.h"
+#include "ir/indexed_vector.h"
 #include "ir/ir.h"
 #include "lib/cstring.h"
 #include "lib/enumerator.h"
@@ -17,6 +19,7 @@
 
 namespace Test {
 
+using P4Tools::Model;
 using P4Tools::Z3Solver;
 using P4Tools::P4Testgen::TestgenTarget;
 using Value = IR::Literal;
@@ -81,13 +84,13 @@ class Z3SolverTests : public ::testing::Test {
         }
 
         // Produce a ProgramInfo, which is needed to create a SmallStepEvaluator.
-        const auto *progInfo = TestgenTarget::initProgram(&test->getProgram());
+        const auto *progInfo = TestgenTarget::initProgram(test->program);
         if (progInfo == nullptr) {
             return;
         }
 
         // Extract the binary operation from the P4Program
-        auto *const declVector = test->getProgram().getDeclsByName("mau")->toVector();
+        auto *const declVector = test->program->getDeclsByName("mau")->toVector();
         const auto *decl = (*declVector)[0];
         const auto *control = decl->to<IR::P4Control>();
         for (const auto *st : control->body->components) {

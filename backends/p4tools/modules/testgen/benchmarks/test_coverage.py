@@ -85,10 +85,11 @@ PARSER.add_argument(
     help="Which test back end to generate tests for.",
 )
 PARSER.add_argument(
-    "-lm",
+    "-m",
     "--large-memory",
     dest="large_memory",
     action="store_true",
+    type=bool,
     help="Run tests with a large memory configuration.",
 )
 PARSER.add_argument(
@@ -175,9 +176,6 @@ def parse_coverage_and_timestamps(test_files, parse_type):
                     if parse_type == "PROTOBUF":
                         datestr = line.replace('metadata: "Date generated: ', "")
                         datestr = datestr.replace('"\n', "")
-                    elif parse_type == "PTF":
-                        datestr = line.replace("Date generated: ", "")
-                        datestr = datestr.replace("\n", "")
                     else:
                         datestr = line.replace("# Date generated: ", "")
                         datestr = datestr.replace("\n", "")
@@ -187,8 +185,6 @@ def parse_coverage_and_timestamps(test_files, parse_type):
                     if parse_type == "PROTOBUF":
                         covstr = line.replace('metadata: "Current node coverage: ', "")
                         covstr = covstr.replace('"\n', "")
-                    elif parse_type == "PTF":
-                        covstr = line.replace("Current node coverage: ", "")
                     else:
                         covstr = line.replace("# Current node coverage: ", "")
                     covstr = covstr.replace("\n", "")
@@ -200,7 +196,7 @@ def collect_data_from_folder(input_dir, parse_type):
     if parse_type == "PTF":
         files = get_test_files(input_dir, "*.py")
     elif parse_type == "PROTOBUF":
-        files = get_test_files(input_dir, "*.txtpb")
+        files = get_test_files(input_dir, "*.proto")
     else:
         files = get_test_files(input_dir, "*.stf")
     return parse_coverage_and_timestamps(files, parse_type)
@@ -215,7 +211,7 @@ def convert_timestamps_to_timedelta(timestamps):
 
 def run_strategies_for_max_tests(options, test_args):
     cmd = (
-        f"{options.p4testgen_bin} --target {options.target} --arch {options.arch}"
+        f"{options.p4testgen_bin} --target {options.target} --arch {options.arch} --std p4-16"
         f" -I/p4/p4c/build/p4include --test-backend {options.test_backend}"
         f" --seed {test_args.seed} --print-performance-report"
         f" --max-tests {options.max_tests} --out-dir {test_args.test_dir}"
@@ -247,26 +243,15 @@ def run_strategies_for_max_tests(options, test_args):
     )
 
     perf_file = test_args.test_dir.joinpath(test_args.p4_program.stem + "_perf").with_suffix(".csv")
-    if perf_file.exists():
-        perf = pd.read_csv(perf_file, index_col=0)
-        summarized_data = [
-            float(final_cov) * 100,
-            num_tests,
-            time_needed,
-            perf["Percentage"]["z3"],
-            perf["Percentage"]["step"],
-            perf["Percentage"]["backend"],
-        ]
-    else:
-        # In some cases, we do not have performance data. Nullify it.
-        summarized_data = [
-            float(final_cov) * 100,
-            num_tests,
-            time_needed,
-            None,
-            None,
-            None,
-        ]
+    perf = pd.read_csv(perf_file, index_col=0)
+    summarized_data = [
+        float(final_cov) * 100,
+        num_tests,
+        time_needed,
+        perf["Percentage"]["z3"],
+        perf["Percentage"]["step"],
+        perf["Percentage"]["backend"],
+    ]
     return summarized_data, nodes_cov, timestamps
 
 
@@ -294,10 +279,7 @@ def main(args, extra_args):
     options.max_tests = args.max_tests
     options.out_dir = Path(args.out_dir).absolute()
     options.seed = args.seed
-    p4testgen_bin = testutils.check_if_file(args.p4testgen_bin)
-    if not p4testgen_bin:
-        return
-    options.p4testgen_bin = Path(p4testgen_bin)
+    options.p4testgen_bin = Path(testutils.check_if_file(args.p4testgen_bin))
     options.test_backend = args.test_backend.upper()
     options.extra_args = extra_args
     options.test_mode = args.test_mode.upper()
@@ -324,7 +306,7 @@ def main(args, extra_args):
     if options.test_mode == "DPDK":
         options.target = "dpdk"
         options.arch = "pna"
-        options.test_backend = "PTF"
+        options.test_backend = "METADATA"
 
     # 7189 is an example of a good seed, which gets cov 1 with less than 100 tests
     # in random access stack.

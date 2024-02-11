@@ -28,7 +28,7 @@ add_custom_target (dpdk_runtime_dir
 # placed in the build directory inside `control-plane` directory
 add_custom_command(
     OUTPUT ${DPDK_P4RUNTIME_INFO_GEN_SRCS} ${DPDK_P4RUNTIME_INFO_GEN_HDRS}
-  COMMAND ${Protobuf_PROTOC_EXECUTABLE}
+  COMMAND ${PROTOBUF_PROTOC_EXECUTABLE}
     --proto_path ${DPDK_P4RUNTIME_DIR}
     --proto_path ${P4RUNTIME_STD_DIR}
     --cpp_out ${CMAKE_CURRENT_BINARY_DIR}/p4/config
@@ -41,7 +41,7 @@ add_dependencies(dpdk_runtime_dir controlplane)
 
 add_library(dpdk_runtime STATIC ${DPDK_P4RUNTIME_INFO_GEN_SRCS})
 target_include_directories(dpdk_runtime
-  SYSTEM BEFORE PUBLIC ${Protobuf_INCLUDE_DIRS}
+  SYSTEM BEFORE PUBLIC ${Protobuf_INCLUDE_DIR}
 )
 
 # Silence various warnings as the root issue is out of our control, example https://github.com/protocolbuffers/protobuf/issues/7140
@@ -110,9 +110,10 @@ install (TARGETS p4c-dpdk
 add_custom_target(linkp4cdpdk
         COMMAND ${CMAKE_COMMAND} -E create_symlink ${CMAKE_CURRENT_BINARY_DIR}/p4c-dpdk ${P4C_BINARY_DIR}/p4c-dpdk
         DEPENDS update_includes
-)
+        )
 
 add_dependencies(p4c_driver linkp4cdpdk)
+
 
 # Tests
 set(DPDK_PTF_DRIVER "${CMAKE_CURRENT_SOURCE_DIR}/run-dpdk-ptf-test.py")
@@ -124,22 +125,27 @@ set (P4_16_SUITES
   "${P4C_SOURCE_DIR}/testdata/p4_16_psa_errors/*.p4"
   "${P4C_SOURCE_DIR}/testdata/p4_16_dpdk_errors/*.p4"
   "${P4C_SOURCE_DIR}/testdata/p4_16_pna_errors/*.p4")
- p4c_add_tests("dpdk" ${DPDK_COMPILER_DRIVER} "${P4_16_SUITES}" "" "--bfrt")
+ p4c_add_tests("dpdk" ${DPDK_COMPILER_DRIVER} "${P4_16_SUITES}" "" "--bfrt") 
 
-#### DPDK-PTF Tests
-# PTF tests for DPDK are only enabled when both infrap4d and dpdk-target are installed.
-set(DPDK_PTF_TEST_SUITES "${P4C_SOURCE_DIR}/testdata/p4_16_samples/pna-dpdk-add_on_miss0.p4")
-# Check for infrap4d.
-find_program(INFRAP4D infrap4d PATHS ${IPDK_INSTALL_DIR}/sbin)
-# DPDK_SDK_INSTALL is the path to the dpdk-target install directory
-if(INFRAP4D AND EXISTS ${IPDK_INSTALL_DIR})
-  set (DPDK_LIB_PATH "${IPDK_INSTALL_DIR}/lib;${IPDK_INSTALL_DIR}/lib/x86_64-linux-gnu")
-  p4c_add_tests(
-    "dpdk-ptf" ${DPDK_PTF_DRIVER} "${DPDK_PTF_TEST_SUITES}" ""
-    "--ipdk-install-dir=${IPDK_INSTALL_DIR} -ll=DEBUG "
-  )
+
+# PTF tests for DPDK is only enabled if infrap4d and dpdk-target are installed.
+# Add PTF tests for these files.
+set (DPDK_PTF_TEST_SUITES
+  "${P4C_SOURCE_DIR}/testdata/p4_16_samples/pna-dpdk-add_on_miss0.p4"
+)
+
+# check for infrap4d
+find_program (INFRAP4D infrap4d
+  PATHS $ENV{IPDK_RECIPE} )
+# SDE_INSTALL is the path to the dpdk-target install directory
+if (INFRAP4D AND DEFINED ENV{SDE_INSTALL})
+   p4c_add_tests("dpdk-ptf" ${DPDK_PTF_DRIVER} "${DPDK_PTF_TEST_SUITES}" "" "--ipdk-recipe=$ENV{IPDK_RECIPE}  \
+      --sde-install=$ENV{SDE_INSTALL} \
+      --ld-library-path=$ENV{LD_LIBRARY_PATH} \
+      -ll=DEBUG ")
 else()
-  message(WARNING "Either infrap4d or dpdk-target is not available (required environment variables are not defined). Skipping DPDK PTF tests")
+  MESSAGE(WARNING "Infrap4d or dpdk-target is not available(Or required Env Vars Not Defined), not adding DPDK PTF tests")
 endif()
+
 
 include(DpdkXfail.cmake)

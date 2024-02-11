@@ -149,8 +149,7 @@ class ParserStateRewriter : public Transform {
           typeMap(typeMap),
           afterExec(afterExec),
           visitedStates(visitedStates),
-          wasOutOfBound(false),
-          wasError(false) {
+          wasOutOfBound(false) {
         CHECK_NULL(parserStructure);
         CHECK_NULL(state);
         CHECK_NULL(refMap);
@@ -173,12 +172,6 @@ class ParserStateRewriter : public Transform {
         ExpressionEvaluator ev(refMap, typeMap, valueMap);
         auto *value = ev.evaluate(expression->right, false);
         if (!value->is<SymbolicInteger>()) return expression;
-        if (!value->to<SymbolicInteger>()->isKnown()) {
-            ::warning(ErrorType::ERR_INVALID, "Uninitialized value prevents loop unrolling:\n%1%",
-                      expression->right);
-            wasError = true;
-            return expression;
-        }
         auto *res = value->to<SymbolicInteger>()->constant->clone();
         newExpression->right = res;
         if (!res->fitsInt64()) {
@@ -237,7 +230,6 @@ class ParserStateRewriter : public Transform {
     }
     inline size_t getIndex() { return currentIndex; }
     bool isOutOfBound() { return wasOutOfBound; }
-    bool checkError() { return wasError; }
 
  protected:
     const IR::Type *getTypeArray(const IR::Node *element) {
@@ -346,7 +338,6 @@ class ParserStateRewriter : public Transform {
     StatesVisitedMap &visitedStates;
     size_t currentIndex;
     bool wasOutOfBound;
-    bool wasError;
 };
 
 class ParserSymbolicInterpreter {
@@ -511,10 +502,6 @@ class ParserSymbolicInterpreter {
         ParserStateRewriter rewriter(structure, state, valueMap, refMap, typeMap, &ev,
                                      visitedStates);
         const IR::Node *node = sord->apply(rewriter);
-        if (rewriter.checkError()) {
-            wasError = true;
-            return nullptr;
-        }
         if (rewriter.isOutOfBound()) {
             return nullptr;
         }

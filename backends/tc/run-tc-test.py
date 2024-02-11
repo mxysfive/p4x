@@ -21,7 +21,6 @@ import shutil
 import stat
 import sys
 import tempfile
-from pathlib import Path
 from subprocess import Popen, call
 from threading import Thread
 
@@ -150,7 +149,7 @@ def check_generated_files(options, tmpdir, expecteddir):
 def process_file(options, argv):
     assert isinstance(options, Options)
 
-    tmpdir = tempfile.mkdtemp(dir=Path(".").absolute())
+    tmpdir = tempfile.mkdtemp(dir=".")
     basename = os.path.basename(options.p4filename)
     base, ext = os.path.splitext(basename)
     dirname = os.path.dirname(options.p4filename)
@@ -158,12 +157,14 @@ def process_file(options, argv):
 
     if options.verbose:
         print("Writing temporary files into ", tmpdir)
-    outputfolder = tmpdir + "/"
+    ppfile = tmpdir + "/" + base + ".template"
+    cfile = tmpdir + "/"
+    introfile = tmpdir + "/" + base + "_introspection.json"
     stderr = tmpdir + "/" + basename + "-stderr"
 
     if not os.path.isfile(options.p4filename):
         raise Exception("No such file " + options.p4filename)
-    args = ["./p4c-pna-p4tc", "-o", outputfolder]
+    args = ["./p4c-pna-p4tc", "-o", ppfile, "-c", cfile, "-i", introfile]
     args.extend(argv)
     print("input: ", options, args, timeout, stderr)
     result = run_timeout(options, args, timeout, stderr)

@@ -120,7 +120,8 @@ bool IFunctional::callMatches(const Vector<Argument> *arguments) const {
     }
     // Check if all remaining parameters have default values
     // or are optional.
-    for (const auto &[_, param] : paramNames) {
+    for (auto it : paramNames) {
+        auto param = it.second;
         if (!param->isOptional() && !param->defaultValue) return false;
     }
     return true;
@@ -157,11 +158,8 @@ size_t Type_Stack::getSize() const {
         ::error(ErrorType::ERR_OVERLIMIT, "Index too large: %1%", cst);
         return 0;
     }
-    auto size = cst->asInt();
-    if (size < 0) {
-        ::error(ErrorType::ERR_OVERLIMIT, "Illegal array size: %1%", cst);
-        return 0;
-    }
+    int size = cst->asInt();
+    if (size < 0) ::error(ErrorType::ERR_OVERLIMIT, "Illegal array size: %1%", cst);
     return static_cast<size_t>(size);
 }
 

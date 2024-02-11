@@ -4,12 +4,11 @@
 #include <map>
 #include <vector>
 
-#include "backends/p4tools/common/lib/util.h"
 #include "ir/ir.h"
-#include "ir/solver.h"
 #include "lib/cstring.h"
 #include "lib/exceptions.h"
 #include "lib/ordered_map.h"
+#include "lib/solver.h"
 
 #include "backends/p4tools/modules/testgen/core/program_info.h"
 #include "backends/p4tools/modules/testgen/core/symbolic_executor/symbolic_executor.h"
@@ -41,7 +40,8 @@ const Bmv2V1ModelProgramInfo *Bmv2V1ModelTestgenTarget::initProgramImpl(
     // The blocks in the main declaration are just the arguments in the constructor call.
     // Convert mainDecl->arguments into a vector of blocks, represented as constructor-call
     // expressions.
-    const auto blocks = argumentsToTypeDeclarations(program, mainDecl->arguments);
+    std::vector<const IR::Type_Declaration *> blocks;
+    argumentsToTypeDeclarations(program, mainDecl->arguments, blocks);
 
     // We should have six arguments.
     BUG_CHECK(blocks.size() == 6, "%1%: The BMV2 architecture requires 6 pipes. Received %2%.",
@@ -54,7 +54,7 @@ const Bmv2V1ModelProgramInfo *Bmv2V1ModelTestgenTarget::initProgramImpl(
     for (size_t idx = 0; idx < blocks.size(); ++idx) {
         const auto *declType = blocks.at(idx);
 
-        auto canonicalName = Bmv2V1ModelProgramInfo::ARCH_SPEC.getArchMember(idx)->blockName;
+        auto canonicalName = ARCH_SPEC.getArchMember(idx)->blockName;
         programmableBlocks.emplace(canonicalName, declType);
 
         if (idx < 3) {
@@ -82,5 +82,30 @@ Bmv2V1ModelExprStepper *Bmv2V1ModelTestgenTarget::getExprStepperImpl(
     ExecutionState &state, AbstractSolver &solver, const ProgramInfo &programInfo) const {
     return new Bmv2V1ModelExprStepper(state, solver, programInfo);
 }
+
+const ArchSpec Bmv2V1ModelTestgenTarget::ARCH_SPEC =
+    ArchSpec("V1Switch", {// parser Parser<H, M>(packet_in b,
+                          //                     out H parsedHdr,
+                          //                     inout M meta,
+                          //                     inout standard_metadata_t standard_metadata);
+                          {"Parser", {nullptr, "*hdr", "*meta", "*standard_metadata"}},
+                          // control VerifyChecksum<H, M>(inout H hdr,
+                          //                              inout M meta);
+                          {"VerifyChecksum", {"*hdr", "*meta"}},
+                          // control Ingress<H, M>(inout H hdr,
+                          //                       inout M meta,
+                          //                       inout standard_metadata_t standard_metadata);
+                          {"Ingress", {"*hdr", "*meta", "*standard_metadata"}},
+                          // control Egress<H, M>(inout H hdr,
+                          //            inout M meta,
+                          //            inout standard_metadata_t standard_metadata);
+                          {"Egress", {"*hdr", "*meta", "*standard_metadata"}},
+                          // control ComputeChecksum<H, M>(inout H hdr,
+                          //                       inout M meta);
+                          {"ComputeChecksum", {"*hdr", "*meta"}},
+                          // control Deparser<H>(packet_out b, in H hdr);
+                          {"Deparser", {nullptr, "*hdr"}}});
+
+const ArchSpec *Bmv2V1ModelTestgenTarget::getArchSpecImpl() const { return &ARCH_SPEC; }
 
 }  // namespace P4Tools::P4Testgen::Bmv2

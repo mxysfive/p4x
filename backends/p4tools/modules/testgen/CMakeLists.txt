@@ -37,8 +37,8 @@ set(
   lib/logging.cpp
   lib/packet_vars.cpp
   lib/test_backend.cpp
-  lib/test_framework.cpp
   lib/test_spec.cpp
+  lib/tf.cpp
 )
 
 # GTest source files for p4testgen.
@@ -52,7 +52,6 @@ set(
   test/lib/format_int.cpp
   test/lib/taint.cpp
   test/small-step/util.cpp
-  test/z3-solver/constraints.cpp
 )
 
 # Inja is needed to produce test templates.
@@ -121,13 +120,11 @@ target_link_libraries(
 
 add_custom_target(
   linkp4testgen
-  # Add some convenience links for invoking P4Testgen.
+  # Add some convenience links for invoking p4testgen.
+  # TODO: How to best handle includes?
   COMMAND ${CMAKE_COMMAND} -E create_symlink ${CMAKE_CURRENT_BINARY_DIR}/p4testgen ${P4C_BINARY_DIR}/p4testgen
-  COMMAND ${CMAKE_COMMAND} -E make_directory ${P4C_BINARY_DIR}/p4include &&
-          ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/p4include/*.p4 ${P4C_BINARY_DIR}/p4include
   COMMAND ${CMAKE_COMMAND} -E create_symlink ${P4C_BINARY_DIR}/p4include ${CMAKE_CURRENT_BINARY_DIR}/p4include
   DEPENDS update_includes
-  COMMENT "Setting P4Testgen include and binary symlinks."
 )
 
 add_dependencies(p4testgen linkp4testgen)

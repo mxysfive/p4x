@@ -1,6 +1,5 @@
 #include "backends/p4tools/common/compiler/midend.h"
 
-#include "backends/p4tools/common/compiler/convert_struct_expr.h"
 #include "backends/p4tools/common/compiler/convert_varbits.h"
 #include "frontends/common/constantFolding.h"
 #include "frontends/common/options.h"
@@ -16,7 +15,6 @@
 #include "midend/convertEnums.h"
 #include "midend/convertErrors.h"
 #include "midend/copyStructures.h"
-#include "midend/eliminateInvalidHeaders.h"
 #include "midend/eliminateNewtype.h"
 #include "midend/eliminateSerEnums.h"
 #include "midend/eliminateSwitch.h"
@@ -31,6 +29,7 @@
 #include "midend/orderArguments.h"
 #include "midend/parserUnroll.h"
 #include "midend/removeLeftSlices.h"
+#include "midend/removeMiss.h"
 #include "midend/removeSelectBooleans.h"
 #include "midend/replaceSelectRange.h"
 #include "midend/simplifyBitwise.h"
@@ -42,7 +41,7 @@ namespace P4Tools {
 
 MidEnd::MidEnd(const CompilerOptions &options) {
     setName("MidEnd");
-    refMap.setIsV1(options.langVersion == CompilerOptions::FrontendVersion::P4_16);
+    refMap.setIsV1(options.langVersion == CompilerOptions::FrontendVersion::P4_14);
 }
 
 Visitor *MidEnd::mkConvertEnums() {
@@ -96,8 +95,6 @@ void MidEnd::addDefaultPasses() {
         new P4::EliminateSwitch(&refMap, &typeMap),
         // Replace types introduced by 'type' with 'typedef'.
         new P4::EliminateNewtype(&refMap, &typeMap),
-        // Remove the invalid header / header-union literal, except for constant expressions
-        new P4::EliminateInvalidHeaders(&refMap, &typeMap),
         // Replace serializable enum constants with their values.
         new P4::EliminateSerEnums(&refMap, &typeMap),
         // Make sure that we have no TypeDef left in the program.
@@ -162,8 +159,6 @@ void MidEnd::addDefaultPasses() {
         new P4::HSIndexSimplifier(&refMap, &typeMap),
         // Convert Type_Varbits into a type that contains information about the assigned width.
         new ConvertVarbits(),
-        // Convert any StructExpressions with Type_Header into a HeaderExpression.
-        new ConvertStructExpr(&typeMap),
         // Cast all boolean table keys with a bit<1>.
         new P4::CastBooleanTableKeys(),
     });

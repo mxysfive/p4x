@@ -194,10 +194,6 @@ class TypeInference : public Transform {
     const IR::ActionListElement *validateActionInitializer(const IR::Expression *actionCall);
     bool containsActionEnum(const IR::Type *type) const;
 
-    /// Check if the underlying type for enum is bit<> or int<> and emit error if it is not.
-    /// @returns the resolved type, or nullptr if the type is invalid
-    const IR::Type_Bits *checkUnderlyingEnumType(const IR::Type *enumType);
-
     //////////////////////////////////////////////////////////////
 
  public:
@@ -237,6 +233,9 @@ class TypeInference : public Transform {
 
     const IR::Node *postorder(IR::Declaration_MatchKind *decl) override;
     const IR::Node *postorder(IR::Declaration_Variable *decl) override;
+    //todo new add for p4x
+    const IR::Node *postorder(IR::RegisterDeclaration *decl) override;
+    const IR::Node *postorder(IR::RegisterActionDeclaration *decl) override;
     const IR::Node *postorder(IR::Declaration_Constant *constant) override;
     const IR::Node *postorder(IR::P4Control *cont) override;
     const IR::Node *postorder(IR::P4Parser *cont) override;
@@ -328,6 +327,8 @@ class TypeInference : public Transform {
 
     const IR::Node *postorder(IR::ReturnStatement *stat) override;
     const IR::Node *postorder(IR::IfStatement *stat) override;
+    const IR::Node *postorder(IR::WhileStatement *wloop) override;
+    const IR::Node *postorder(IR::ForStatement* forloop);
     const IR::Node *postorder(IR::SwitchStatement *stat) override;
     const IR::Node *postorder(IR::AssignmentStatement *stat) override;
     const IR::Node *postorder(IR::ActionListElement *elem) override;
@@ -338,7 +339,6 @@ class TypeInference : public Transform {
 
     Visitor::profile_t init_apply(const IR::Node *node) override;
     void end_apply(const IR::Node *Node) override;
-    const IR::Node *apply_visitor(const IR::Node *, const char *name = 0) override;
 
     TypeInference *clone() const override;
     // Apply recursively the typechecker to the newly created node

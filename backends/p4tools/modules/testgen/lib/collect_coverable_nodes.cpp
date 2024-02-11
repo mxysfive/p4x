@@ -80,7 +80,7 @@ bool CoverableNodesScanner::preorder(const IR::MethodCallExpression *call) {
                         const auto *tableAction =
                             entry->action->checkedTo<IR::MethodCallExpression>();
                         const auto *actionType = executionState.getP4Action(tableAction);
-                        actionType->apply_visitor_preorder(*this);
+                        actionType->body->apply_visitor_preorder(*this);
                     }
                 }
             } else {
@@ -88,19 +88,19 @@ bool CoverableNodesScanner::preorder(const IR::MethodCallExpression *call) {
                     const auto *tableAction =
                         action->expression->checkedTo<IR::MethodCallExpression>();
                     const auto *actionType = executionState.getP4Action(tableAction);
-                    actionType->apply_visitor_preorder(*this);
+                    actionType->body->apply_visitor_preorder(*this);
                 }
             }
             const auto *defaultAction = table->getDefaultAction();
             const auto *tableAction = defaultAction->checkedTo<IR::MethodCallExpression>();
             const auto *actionType = executionState.getP4Action(tableAction);
-            actionType->apply_visitor_preorder(*this);
+            actionType->body->apply_visitor_preorder(*this);
         }
         return false;
     }
     if (call->method->type->is<IR::Type_Action>()) {
         const auto *actionType = executionState.getP4Action(call);
-        actionType->apply_visitor_preorder(*this);
+        actionType->body->apply_visitor_preorder(*this);
         return false;
     }
     return false;
@@ -122,24 +122,12 @@ bool CoverableNodesScanner::preorder(const IR::ExitStatement *stmt) {
     return true;
 }
 
-bool CoverableNodesScanner::preorder(const IR::P4Action *act) {
-    // Only track actions, which have a valid source position in the P4 program.
-    if (coverageOptions.coverActions && act->getSourceInfo().isValid()) {
-        coverableNodes.insert(act);
-    }
-    // Visit body only.
-    act->body->apply_visitor_preorder(*this);
-    return false;
-}
-
 const P4::Coverage::CoverageSet &CoverableNodesScanner::getCoverableNodes() {
     return coverableNodes;
 }
 
 void CoverableNodesScanner::updateNodeCoverage(const IR::Node *node,
                                                P4::Coverage::CoverageSet &nodes) {
-    CHECK_NULL(node);
-
     static NodeCache CACHED_NODES;
     // If the node is already in the cache, return it.
     auto it = CACHED_NODES.find(node);

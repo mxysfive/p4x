@@ -38,7 +38,6 @@ and limitations under the License.
 #include "midend/copyStructures.h"
 #include "midend/eliminateInvalidHeaders.h"
 #include "midend/eliminateNewtype.h"
-#include "midend/eliminateSerEnums.h"
 #include "midend/eliminateTuples.h"
 #include "midend/expandEmit.h"
 #include "midend/local_copyprop.h"

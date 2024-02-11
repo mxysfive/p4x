@@ -13,7 +13,7 @@ class Testgen : public AbstractP4cTool<TestgenOptions> {
  protected:
     void registerTarget() override;
 
-    int mainImpl(const CompilerResult &compilerResult) override;
+    int mainImpl(const IR::P4Program *program) override;
 
  public:
     virtual ~Testgen() = default;

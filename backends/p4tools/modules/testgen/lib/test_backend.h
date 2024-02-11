@@ -14,8 +14,8 @@
 #include "backends/p4tools/modules/testgen/core/symbolic_executor/symbolic_executor.h"
 #include "backends/p4tools/modules/testgen/lib/execution_state.h"
 #include "backends/p4tools/modules/testgen/lib/final_state.h"
-#include "backends/p4tools/modules/testgen/lib/test_framework.h"
 #include "backends/p4tools/modules/testgen/lib/test_spec.h"
+#include "backends/p4tools/modules/testgen/lib/tf.h"
 #include "backends/p4tools/modules/testgen/options.h"
 
 namespace P4Tools::P4Testgen {
@@ -33,7 +33,7 @@ class TestBackEnd {
     const ProgramInfo &programInfo;
 
     /// Writes the tests out to a file.
-    TestFramework *testWriter = nullptr;
+    TF *testWriter = nullptr;
 
     /// Pointer to the symbolic executor.
     /// TODO: Remove this.
@@ -41,9 +41,6 @@ class TestBackEnd {
 
     /// Test maximum number of tests that are to be produced.
     int64_t maxTests;
-
-    /// The accumulated coverage of all finished test cases. Number in range [0, 1].
-    float coverage = 0;
 
     explicit TestBackEnd(const ProgramInfo &programInfo, SymbolicExecutor &symbex)
         : programInfo(programInfo), symbex(symbex), maxTests(TestgenOptions::get().maxTests) {
@@ -114,11 +111,13 @@ class TestBackEnd {
     /// The callback that is executed by the symbolic executor.
     virtual bool run(const FinalState &state);
 
-    /// Returns test count.
-    [[nodiscard]] int64_t getTestCount() const;
+    /// Print out some performance numbers if logging feature "performance" is enabled.
+    /// Also log performance numbers to a separate file in the test folder if @param write is
+    /// enabled.
+    void printPerformanceReport(bool write) const;
 
-    /// Returns coverage achieved by all the processed tests.
-    [[nodiscard]] float getCoverage() const;
+    /// Accessors.
+    [[nodiscard]] int64_t getTestCount() const;
 };
 
 }  // namespace P4Tools::P4Testgen

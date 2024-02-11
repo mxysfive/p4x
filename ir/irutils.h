@@ -12,7 +12,7 @@ namespace IR {
 class BoolLiteral;
 class Constant;
 class Expression;
-class BaseListExpression;
+class ListExpression;
 class Literal;
 class StructExpression;
 class Type;
@@ -38,14 +38,10 @@ const Type_Bits *getBitTypeToFit(int value);
  * ========================================================================================= */
 
 /// @returns a constant. The value is cached.
-const Constant *getConstant(const Type *type, big_int v, const Util::SourceInfo &srcInfo = {});
+const Constant *getConstant(const Type *type, big_int v);
 
 /// @returns a bool literal. The value is cached.
-const BoolLiteral *getBoolLiteral(bool value, const Util::SourceInfo &srcInfo = {});
-
-/// @returns a constant with the maximum big_int value that can fit into this bit width.
-/// Implicitly converts boolean types to a bit vector of width one with value 1.
-const IR::Constant *getMaxValueConstant(const Type *t, const Util::SourceInfo &srcInfo = {});
+const BoolLiteral *getBoolLiteral(bool value);
 
 /// @returns the "default" value for a given type.
 /// The resulting expression will have the specified srcInfo position.
@@ -71,20 +67,18 @@ const IR::Expression *getDefaultValue(const Type *type, const Util::SourceInfo &
 /// The value is 1, if the bool literal is true, 0 otherwise.
 const IR::Constant *convertBoolLiteral(const IR::BoolLiteral *lit);
 
+/// @returns a constant with the maximum big_int value that can fit into this bit width.
+/// Implicitly converts boolean types to a bit vector of width one with value 1.
+const IR::Constant *getMaxValueConstant(const Type *t);
+
 /// Given an StructExpression, returns a flat vector of the expressions contained in that
 /// struct. Unfortunately, list and struct expressions are similar but have no common ancestors.
 /// This is why we require two separate methods.
-/// Note that this function will fail if the type of @param structExpr is not a Type_Name.
 std::vector<const Expression *> flattenStructExpression(const StructExpression *structExpr);
 
-/// Given an BaseListExpression, returns a flat vector of the expressions contained in that
+/// Given an ListExpression, returns a flat vector of the expressions contained in that
 /// list.
-std::vector<const Expression *> flattenListExpression(const BaseListExpression *listExpr);
-
-/// Given a StructExpression or BaseListExpression, returns a flat vector of the expressions
-/// contained in that list.
-/// Note that this function will fail if the type of any input struct expression is not a Type_Name.
-std::vector<const Expression *> flattenListOrStructExpression(const Expression *listLikeExpr);
+std::vector<const Expression *> flattenListExpression(const ListExpression *listExpr);
 
 /* =========================================================================================
  *  Other helper functions

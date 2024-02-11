@@ -6,8 +6,8 @@
 #include <vector>
 
 #include "ir/ir.h"
-#include "ir/solver.h"
 #include "lib/cstring.h"
+#include "lib/solver.h"
 
 #include "backends/p4tools/modules/testgen/core/program_info.h"
 #include "backends/p4tools/modules/testgen/core/small_step/abstract_stepper.h"
@@ -34,6 +34,10 @@ class CmdStepper : public AbstractStepper {
     bool preorder(const IR::SwitchStatement *switchStatement) override;
 
  protected:
+    /// This call replaces the action labels of cases in a switch statement with the corresponding
+    /// indices. We need this to match the executed action with the appropriate label.
+    IR::SwitchStatement *replaceSwitchLabels(const IR::SwitchStatement *switchStatement);
+
     /// Initializes the given state for entry into the given parser.
     ///
     /// @returns constraints for associating packet data with symbolic state.

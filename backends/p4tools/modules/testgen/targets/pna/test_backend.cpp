@@ -24,13 +24,12 @@
 #include "backends/p4tools/modules/testgen/lib/test_object.h"
 #include "backends/p4tools/modules/testgen/options.h"
 #include "backends/p4tools/modules/testgen/targets/pna/backend/metadata/metadata.h"
-#include "backends/p4tools/modules/testgen/targets/pna/backend/ptf/ptf.h"
 #include "backends/p4tools/modules/testgen/targets/pna/dpdk/program_info.h"
 #include "backends/p4tools/modules/testgen/targets/pna/test_spec.h"
 
 namespace P4Tools::P4Testgen::Pna {
 
-const std::set<std::string> PnaTestBackend::SUPPORTED_BACKENDS = {"METADATA", "PTF"};
+const std::set<std::string> PnaTestBackend::SUPPORTED_BACKENDS = {"METADATA"};
 
 PnaTestBackend::PnaTestBackend(const ProgramInfo &programInfo, SymbolicExecutor &symbex,
                                const std::filesystem::path &testPath)
@@ -43,11 +42,9 @@ PnaTestBackend::PnaTestBackend(const ProgramInfo &programInfo, SymbolicExecutor 
             Utils::containerToString(SUPPORTED_BACKENDS));
         exit(EXIT_FAILURE);
     }
-    auto seed = TestgenOptions::get().seed;
+
     if (testBackendString == "METADATA") {
         testWriter = new Metadata(testPath.c_str(), TestgenOptions::get().seed);
-    } else if (testBackendString == "PTF") {
-        testWriter = new PTF(testPath.c_str(), seed);
     } else {
         P4C_UNIMPLEMENTED(
             "Test back end %1% not implemented for this target. Supported back ends are %2%.",
@@ -79,13 +76,15 @@ const TestSpec *PnaTestBackend::createTestSpec(const ExecutionState *executionSt
     }
     testSpec = new TestSpec(ingressPacket, egressPacket, testInfo.programTraces);
 
-    // If metadata mode is enabled, gather the user metadata variable from the parser.
+    // If metadata mode is enabled, gather the user metadata variable form the parser.
     // Save the values of all the fields in it and return.
     if (TestgenOptions::get().testBackend == "METADATA") {
         auto *metadataCollection = new MetadataCollection();
         const auto *pnaProgInfo = programInfo.checkedTo<PnaDpdkProgramInfo>();
         const auto *localMetadataVar = pnaProgInfo->getBlockParam("MainParserT", 2);
-        const auto &flatFields = executionState->getFlatFields(localMetadataVar, {});
+        const auto *localMetadataType = executionState->resolveType(localMetadataVar->type);
+        const auto &flatFields = executionState->getFlatFields(
+            localMetadataVar, localMetadataType->checkedTo<IR::Type_Struct>(), {});
         for (const auto &fieldRef : flatFields) {
             const auto *fieldVal = finalModel->evaluate(executionState->get(fieldRef), true);
             // Try to remove the leading internal name for the metadata field.

@@ -20,7 +20,6 @@ void HSIndexFinder::addNewVariable() {
     if (locals != nullptr && (arrayIndex->right->is<IR::Operation_Ternary>() ||
                               arrayIndex->right->is<IR::Operation_Binary>() ||
                               arrayIndex->right->is<IR::Operation_Unary>() ||
-                              arrayIndex->right->is<IR::MethodCallExpression>() ||
                               arrayIndex->right->is<IR::PathExpression>())) {
         // Generate new local variable if needed.
         std::ostringstream ostr;

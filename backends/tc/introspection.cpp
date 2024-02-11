@@ -183,8 +183,7 @@ Util::JsonObject *IntrospectionGenerator::genActionInfo(struct ActionAttributes 
         paramJson->emplace("name", param->name);
         switch (param->dataType) {
             case TC::BIT_TYPE: {
-                auto paramtype = "bit" + Util::toString(param->bitwidth);
-                paramJson->emplace("type", paramtype);
+                paramJson->emplace("type", "bit");
                 break;
             }
             case TC::DEV_TYPE: {

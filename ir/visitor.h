@@ -78,14 +78,13 @@ class Visitor {
         Visitor &v;
         uint64_t start;
         explicit profile_t(Visitor &);
-        friend class Visitor;
-
-     public:
         profile_t() = delete;
         profile_t(const profile_t &) = delete;
         profile_t &operator=(const profile_t &) = delete;
         profile_t &operator=(profile_t &&) = delete;
+        friend class Visitor;
 
+     public:
         ~profile_t();
         profile_t(profile_t &&);
     };
@@ -246,7 +245,6 @@ class Visitor {
     template <class T>
     inline const T *findContext(const Context *&c) const {
         if (!c) c = ctxt;
-        if (!c) return nullptr;
         while ((c = c->parent))
             if (auto *rv = dynamic_cast<const T *>(c->node)) return rv;
         return nullptr;
@@ -259,7 +257,6 @@ class Visitor {
     template <class T>
     inline const T *findOrigCtxt(const Context *&c) const {
         if (!c) c = ctxt;
-        if (!c) return nullptr;
         while ((c = c->parent))
             if (auto *rv = dynamic_cast<const T *>(c->original)) return rv;
         return nullptr;

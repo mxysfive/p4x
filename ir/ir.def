@@ -25,7 +25,7 @@
   #emit/#end      -> copy text literally to output header file
   #emit_impl/#end -> copy text literally to output C++ file
   #noXXX          -> do not emit the specified implementation for the XXX method
-                     e.g., #noconstructor, #nodbprint, #novisit_children, #nomethod_constructor
+                     e.g., #noconstructor, #nodbprint, #novisit_children
   #apply          -> generate apply overload for visitors
   method{ ... }   -> specifies an implementation for a default method
                      method can be 'operator=='
@@ -51,7 +51,8 @@
   Unless there is a '#noconstructor' tag in the class, a constructor
   will automatically be generated that takes as arguments values to
   initialize all fields of the IR class and its bases that do not have
-  explicit initializers. There are some special method constructors which ignore #noconstructor, such as Class(JSONLoader &json). #nomethod_constructor will prevent these files from being generated. Fields marked 'optional' will create multiple constructors both with and without an argument for that field.
+  explicit initializers.  Fields marked 'optional' will create multiple
+  constructors both with and without an argument for that field.
  */
 
 class ParserState : ISimpleNamespace, Declaration, IAnnotated {
@@ -379,6 +380,24 @@ class Declaration_Variable : Declaration, IAnnotated {
         if (initializer) out << " = " << *initializer; }
 }
 
+class RegisterDeclaration : Declaration {
+    Vector<Type>  typeArguments;
+    Expression parameter;
+    dbprint {
+        out<<"RegisterDeclaration\n";
+    }
+}
+
+class RegisterActionDeclaration : Declaration {
+    Vector<Type>  typeArguments;
+    Expression parameter;
+    IndexedVector<Parameter> innerAplParas;
+    Statement stmt;
+    dbprint {
+        out<<"RegisterActionDeclaration\n";
+    }
+}
+
 class Declaration_Constant : Declaration, IAnnotated {
     optional Annotations        annotations = Annotations::empty;
     Type                        type;
@@ -452,6 +471,24 @@ class IfStatement : Statement {
         v.visit(condition, "condition");
         SplitFlowVisit<Statement>(v, ifTrue, ifFalse).run_visit(); }
 }
+
+class WhileStatement : Statement {
+   Expression       condition;
+   Statement        whileBody;
+}
+
+class ForInitializer : Statement {
+    NullOK  Type t;
+    NullOK IndexedVector<NamedExpression> kvList;
+}
+
+class ForStatement : Statement {
+   NullOK Statement forInit;
+   NullOK Vector<Expression> condList;
+   NullOK Vector<Expression> iterList;
+   Statement forBody;
+}
+
 
 class BlockStatement : Statement, ISimpleNamespace, IAnnotated {
     optional Annotations                        annotations = Annotations::empty;

@@ -4,13 +4,12 @@
 
 #include <vector>
 
-#include "backends/p4tools/common/lib/util.h"
 #include "ir/ir.h"
-#include "ir/solver.h"
 #include "lib/cstring.h"
 #include "lib/error.h"
 #include "lib/exceptions.h"
 #include "lib/ordered_map.h"
+#include "lib/solver.h"
 
 #include "backends/p4tools/modules/testgen/core/program_info.h"
 #include "backends/p4tools/modules/testgen/core/symbolic_executor/symbolic_executor.h"
@@ -42,7 +41,8 @@ const EBPFProgramInfo *EBPFTestgenTarget::initProgramImpl(
     // The blocks in the main declaration are just the arguments in the constructor call.
     // Convert mainDecl->arguments into a vector of blocks, represented as constructor-call
     // expressions.
-    const auto blocks = argumentsToTypeDeclarations(program, mainDecl->arguments);
+    std::vector<const IR::Type_Declaration *> blocks;
+    argumentsToTypeDeclarations(program, mainDecl->arguments, blocks);
 
     // We should have six arguments.
     BUG_CHECK(blocks.size() == 2, "%1%: The EBPF architecture requires 2 blocks. Received %2%.",
@@ -51,7 +51,7 @@ const EBPFProgramInfo *EBPFTestgenTarget::initProgramImpl(
     ordered_map<cstring, const IR::Type_Declaration *> programmableBlocks;
     for (size_t idx = 0; idx < blocks.size(); ++idx) {
         const auto *declType = blocks.at(idx);
-        auto canonicalName = EBPFProgramInfo::ARCH_SPEC.getArchMember(idx)->blockName;
+        auto canonicalName = archSpec.getArchMember(idx)->blockName;
         programmableBlocks.emplace(canonicalName, declType);
     }
 
@@ -83,5 +83,13 @@ EBPFExprStepper *EBPFTestgenTarget::getExprStepperImpl(ExecutionState &state,
                                                        const ProgramInfo &programInfo) const {
     return new EBPFExprStepper(state, solver, programInfo);
 }
+
+const ArchSpec EBPFTestgenTarget::archSpec =
+    ArchSpec("ebpfFilter", {// parser parse<H>(packet_in packet, out H headers);
+                            {"parse", {nullptr, "*hdr"}},
+                            // control filter<H>(inout H headers, out bool accept);
+                            {"filter", {"*hdr", "*accept"}}});
+
+const ArchSpec *EBPFTestgenTarget::getArchSpecImpl() const { return &archSpec; }
 
 }  // namespace P4Tools::P4Testgen::EBPF

@@ -181,10 +181,10 @@ TestgenOptions::TestgenOptions()
             selectedBranches = arg;
             // These options are mutually exclusive.
             if (trackBranches) {
-                ::error(
-                    "--input-branches and --track-branches are mutually exclusive. Choose "
-                    "one or the other.");
-                return false;
+                std::cerr << "--input-branches and --track-branches are mutually exclusive. Choose "
+                             "one or the other."
+                          << std::endl;
+                exit(1);
             }
             return true;
         },
@@ -196,10 +196,10 @@ TestgenOptions::TestgenOptions()
             trackBranches = true;
             // These options are mutually exclusive.
             if (!selectedBranches.empty()) {
-                ::error(
-                    "--input-branches and --track-branches are mutually exclusive. Choose "
-                    "one or the other.");
-                return false;
+                std::cerr << "--input-branches and --track-branches are mutually exclusive. Choose "
+                             "one or the other."
+                          << std::endl;
+                exit(1);
             }
             return true;
         },
@@ -207,14 +207,14 @@ TestgenOptions::TestgenOptions()
         "used for deterministic replay.");
 
     registerOption(
-        "--output-packet-only", nullptr,
+        "--with-output-packet", nullptr,
         [this](const char *) {
-            outputPacketOnly = true;
+            withOutputPacket = true;
             if (!selectedBranches.empty()) {
-                ::error(
-                    "--input-branches cannot guarantee --output-packet-only."
-                    " Aborting.");
-                return false;
+                std::cerr << "--input-branches cannot guarantee --with-output-packet."
+                             " Aborting."
+                          << std::endl;
+                exit(1);
             }
             return true;
         },
@@ -255,9 +255,10 @@ TestgenOptions::TestgenOptions()
     registerOption(
         "--track-coverage", "coverageItem",
         [this](const char *arg) {
-            static std::set<cstring> const COVERAGE_OPTIONS = {"STATEMENTS", "TABLE_ENTRIES",
-                                                               "ACTIONS"};
-            hasCoverageTracking = true;
+            static std::set<cstring> const COVERAGE_OPTIONS = {
+                "STATEMENTS",
+                "TABLE_ENTRIES",
+            };
             auto selectionString = cstring(arg).toUpper();
             auto it = COVERAGE_OPTIONS.find(selectionString);
             if (it != COVERAGE_OPTIONS.end()) {
@@ -269,10 +270,6 @@ TestgenOptions::TestgenOptions()
                     coverageOptions.coverTableEntries = true;
                     return true;
                 }
-                if (selectionString == "ACTIONS") {
-                    coverageOptions.coverActions = true;
-                    return true;
-                }
             }
             ::error(
                 "Coverage tracking for label %1% not supported. Supported coverage tracking "
@@ -282,39 +279,8 @@ TestgenOptions::TestgenOptions()
             return false;
         },
         "Specifies, which IR nodes to track for coverage in the targeted P4 program. Multiple "
-        "options are possible: Currently supported: STATEMENTS, TABLE_ENTRIES (table rules encoded "
-        "in the table entries in P4), ACTIONS (actions invoked, directly or by tables). "
+        "options are possible: Currently supported: STATEMENTS, TABLE_ENTRIES "
         "Defaults to no coverage.");
-
-    registerOption(
-        "--only-covering-tests", nullptr,
-        [this](const char *) {
-            coverageOptions.onlyCoveringTests = true;
-            return true;
-        },
-        "If coverage tracking is enabled only generate tests which update the total number of "
-        "covered nodes.");
-
-    registerOption(
-        "--assert-min-coverage", "minCoverage",
-        [this](const char *arg) {
-            try {
-                minCoverage = std::stof(arg);
-                if (minCoverage < 0 || minCoverage > 1) {
-                    throw std::invalid_argument("Invalid input.");
-                }
-            } catch (std::invalid_argument &) {
-                ::error(
-                    "Invalid input value %1% for --assert-min-coverage. "
-                    "Expected float in range [0, 1].",
-                    arg);
-                return false;
-            }
-            return true;
-        },
-        "Specifies minimum coverage that needs to be achieved for P4Testgen to exit successfully. "
-        "The input needs to be value in range [0, 1] (where 1 means the metric is fully covered). "
-        "Defaults to 0 which means no checking.");
 
     registerOption(
         "--print-traces", nullptr,
@@ -345,7 +311,7 @@ TestgenOptions::TestgenOptions()
     registerOption(
         "--print-performance-report", nullptr,
         [](const char *) {
-            enablePerformanceLogging();
+            P4Testgen::enablePerformanceLogging();
             return true;
         },
         "Print timing report summary at the end of the program.");
@@ -384,18 +350,6 @@ TestgenOptions::TestgenOptions()
         },
         "Produce only tests that violate the condition defined in assert calls. This will either "
         "produce no tests or only tests that contain counter examples.");
-}
-
-bool TestgenOptions::validateOptions() const {
-    if (minCoverage > 0 && !hasCoverageTracking) {
-        ::error(
-            ErrorType::ERR_INVALID,
-            "It is not allowed to have --assert-min-coverage set to non-zero without a coverage "
-            "tracking enabled with --track-coverage option. Without coverage tracking, the "
-            "--assert-min-coverage is meaningless.");
-        return false;
-    }
-    return true;
 }
 
 }  // namespace P4Tools::P4Testgen

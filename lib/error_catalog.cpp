@@ -38,9 +38,11 @@ const int ErrorType::ERR_IO = 14;
 const int ErrorType::ERR_UNREACHABLE = 15;
 const int ErrorType::ERR_MODEL = 16;
 const int ErrorType::ERR_RESERVED = 17;
+// If we specialize for 1000 error types we're good!
+const int ErrorType::ERR_MAX_ERRORS = 999;
 
 // ------ Warnings -----------
-const int ErrorType::LEGACY_WARNING = ERR_MAX + 1;
+const int ErrorType::LEGACY_WARNING = ERR_MAX_ERRORS + 1;
 const int ErrorType::WARN_FAILED = 1001;
 const int ErrorType::WARN_UNKNOWN = 1002;
 const int ErrorType::WARN_INVALID = 1003;
@@ -63,10 +65,7 @@ const int ErrorType::WARN_UNINITIALIZED_USE = 1019;
 const int ErrorType::WARN_INVALID_HEADER = 1020;
 const int ErrorType::WARN_DUPLICATE_PRIORITIES = 1021;
 const int ErrorType::WARN_ENTRIES_OUT_OF_ORDER = 1022;
-
-// ------ Info messages -----------
-const int ErrorType::INFO_INFERRED = WARN_MAX + 1;
-const int ErrorType::INFO_PROGRESS = 2143;
+const int ErrorType::WARN_MAX_WARNINGS = 2142;
 
 // map from errorCode to ErrorSig
 std::map<int, cstring> ErrorCatalog::errorCatalog = {
@@ -112,8 +111,4 @@ std::map<int, cstring> ErrorCatalog::errorCatalog = {
     {ErrorType::WARN_IGNORE, "ignore"},
     {ErrorType::WARN_INVALID_HEADER, "invalid_header"},
     {ErrorType::WARN_DUPLICATE_PRIORITIES, "duplicate_priorities"},
-    {ErrorType::WARN_ENTRIES_OUT_OF_ORDER, "entries_out_of_priority_order"},
-
-    // Info messages
-    {ErrorType::INFO_INFERRED, "inferred"},
-    {ErrorType::INFO_PROGRESS, "progress"}};
+    {ErrorType::WARN_ENTRIES_OUT_OF_ORDER, "entries_out_of_priority_order"}};

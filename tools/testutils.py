@@ -49,12 +49,10 @@ class LogPipe(threading.Thread):
         and start the thread
         """
         threading.Thread.__init__(self)
-        self.daemon: bool = False
-        self.level: int = level
+        self.daemon = False
+        self.level = level
         self.fd_read, self.fd_write = os.pipe()
         self.pipe_reader = os.fdopen(self.fd_read)
-        # We capture what we log to this string.
-        self.out: str = ""
         self.start()
 
     def fileno(self) -> int:
@@ -62,10 +60,10 @@ class LogPipe(threading.Thread):
         return self.fd_write
 
     def run(self) -> None:
-        """Run the thread, logging and record everything."""
+        """Run the thread, logging everything."""
         for line in iter(self.pipe_reader.readline, ""):
             log.log(self.level, line.strip("\n"))
-            self.out += line
+
         self.pipe_reader.close()
 
     def close(self) -> None:
@@ -151,7 +149,7 @@ def pick_tcp_port(addr: str, default_port: int) -> int:
 def open_process(args: str, **extra_args) -> Optional[subprocess.Popen]:
     """Start the given argument string as a subprocess and return the handle to the process.
     @param extra_args is forwarded to the subprocess.communicate command"""
-    log.info("Writing %s", args)
+    log.info("Writing %s", " ".join(args))
     proc = None
     output_args = {
         "stdout": subprocess.PIPE,
@@ -218,8 +216,6 @@ def exec_process(args: str, **extra_args) -> ProcessResult:
         args = list(filter(None, args))
 
     # Set up log pipes for both stdout and stderr.
-    outpipe: Optional[LogPipe] = None
-    errpipe: Optional[LogPipe] = None
     if "capture_output" not in extra_args:
         if "stdout" not in extra_args:
             outpipe = LogPipe(logging.INFO)
@@ -229,14 +225,10 @@ def exec_process(args: str, **extra_args) -> ProcessResult:
             output_args["stderr"] = errpipe
     try:
         result = subprocess.run(args, check=True, **output_args)
-        if outpipe:
-            out = outpipe.out
-        else:
-            out = result.stdout
+        out = result.stdout
         returncode = result.returncode
     except subprocess.CalledProcessError as exception:
-        if errpipe:
-            out = errpipe.out
+        out = exception.stderr
         returncode = exception.returncode
         cmd = exception.cmd
         # Rejoin the list for better readability.
@@ -244,10 +236,7 @@ def exec_process(args: str, **extra_args) -> ProcessResult:
             cmd = " ".join(cmd)
         log.error('Error %s when executing "%s".', returncode, cmd)
     except subprocess.TimeoutExpired as exception:
-        if errpipe:
-            out = errpipe.out
-        else:
-            out = str(exception.stderr)
+        out = exception.stderr
         returncode = FAILURE
         cmd = exception.cmd
         # Rejoin the list for better readability.
@@ -256,9 +245,9 @@ def exec_process(args: str, **extra_args) -> ProcessResult:
         log.error("Timed out when executing %s.", cmd)
     finally:
         if "capture_output" not in extra_args:
-            if outpipe:
+            if "stdout" not in extra_args:
                 outpipe.close()
-            if errpipe:
+            if "stderr" not in extra_args:
                 errpipe.close()
     return ProcessResult(out, returncode)
 
